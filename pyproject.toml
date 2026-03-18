@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sovp"
+version = "1.0.0"
+description = "Sovereign Validation Protocol (SOVP) Core Engine"
+authors = [{name = "Litzki Systems LLC"}]
+license = {text = "Apache-2.0"}
+dependencies = [
+    "cryptography",
+    "canonicaljson",
+]
+
+[project.scripts]
+sovp = "sovp.cli:main"
