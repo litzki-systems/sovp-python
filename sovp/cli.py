@@ -1,3 +1,4 @@
+# File: sovp/cli.py - Command Line Interface Logic
 # Copyright 2026 Litzki Systems LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");

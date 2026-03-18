@@ -1,3 +1,4 @@
+# File: tests/test_core.py - Unit Tests for SOVP Core Logic
 # Copyright 2026 Litzki Systems LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
