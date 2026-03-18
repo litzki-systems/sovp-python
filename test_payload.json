@@ -1,0 +1,6 @@
+{
+  "@context": "https://litzki-systems.org/protocol/v1.5",
+  "@type": "SovereignIdentity",
+  "uid": "urn:sovp:cli-test-01",
+  "canonical_url": "https://test.litzki-systems.org"
+}
