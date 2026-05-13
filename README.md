@@ -140,7 +140,7 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 
 - **Cryptography:** Ed25519 (RFC 8032)
 - **Canonicalization:** JSON Canonicalization Scheme / JCS (RFC 8785)
-- **Hashing:** SHA-512 digest of the canonical payload passed as the message to Ed25519 `sign()` / `verify()`
+- **Hashing:** Ed25519 pure mode (RFC 8032): `sign(JCS(M))` — the JCS-canonical payload is passed directly to Ed25519 `sign()` / `verify()` without pre-hashing
 - **Key distribution:** DNS TXT record at `_sovp.yourdomain.tld` (see DNS Setup below)
 - **Replay protection:** `created` timestamp + optional `nonce` in `integrity_proof` — field parsing is not yet validated by this library (see Roadmap)
 
