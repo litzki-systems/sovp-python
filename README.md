@@ -233,3 +233,6 @@ The SOVP protocol specification and ZWAP architecture are intellectual property 
 [Litzki Systems LLC](https://litzki-systems.com)  
 St. Petersburg, FL, USA · Operating from Mexico City  
 [info@litzki-systems.com](mailto:info@litzki-systems.com)
+
+Development of this reference implementation was assisted by
+[Claude Code](https://claude.ai/code) (Anthropic).
