@@ -75,7 +75,7 @@ import json
 
 # Fields to sign — do NOT include integrity_proof here
 metadata = {
-    "@context": "https://litzki-systems.org/protocol/v1.5",
+    "@context": "https://litzki-systems.com/protocol/v1.5",
     "@type": "SovereignIdentity",
     "uid": "urn:sovp:your-entity-id",
     "canonical_url": "https://yourdomain.com"
@@ -107,7 +107,7 @@ from sovp.core import verify_identity
 
 # Use the same fields that were signed (excluding integrity_proof)
 metadata = {
-    "@context": "https://litzki-systems.org/protocol/v1.5",
+    "@context": "https://litzki-systems.com/protocol/v1.5",
     "@type": "SovereignIdentity",
     "uid": "urn:sovp:your-entity-id",
     "canonical_url": "https://yourdomain.com"
@@ -152,7 +152,7 @@ Full protocol specification: [IETF Internet-Draft draft-litzki-sovp-05](https://
 
 ```json
 {
-  "@context": "https://litzki-systems.org/protocol/v1.5",
+  "@context": "https://litzki-systems.com/protocol/v1.5",
   "@type": "SovereignIdentity",
   "entity": {
     "uid": "urn:sovp:your-entity-id",
