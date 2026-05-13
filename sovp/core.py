@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hashlib
 import base64
 import canonicaljson
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -46,7 +45,7 @@ def generate_keypair() -> tuple[str, str]:
 def sign_identity(private_key_b64: str, identity_metadata: dict) -> str:
     """
     Signs the canonicalized identity metadata using the Ed25519 private key.
-    The metadata is formatted according to RFC 8785 (JCS) and pre-hashed with SHA-512.
+    The metadata is canonicalized according to RFC 8785 (JCS) before signing.
     
     Args:
         private_key_b64 (str): The base64 encoded Ed25519 private key.
@@ -59,9 +58,7 @@ def sign_identity(private_key_b64: str, identity_metadata: dict) -> str:
     private_key = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
     
     canonical_data = canonicaljson.encode_canonical_json(identity_metadata)
-    digest = hashlib.sha512(canonical_data).digest()
-    
-    signature = private_key.sign(digest)
+    signature = private_key.sign(canonical_data)
     return base64.b64encode(signature).decode('utf-8')
 
 def verify_identity(identity_metadata: dict, signature_b64: str, public_key_b64: str) -> bool:
@@ -82,9 +79,7 @@ def verify_identity(identity_metadata: dict, signature_b64: str, public_key_b64:
         sig_bytes = base64.b64decode(signature_b64)
         
         canonical_data = canonicaljson.encode_canonical_json(identity_metadata)
-        digest = hashlib.sha512(canonical_data).digest()
-        
-        public_key.verify(sig_bytes, digest)
+        public_key.verify(sig_bytes, canonical_data)
         return True
         
     except (InvalidSignature, ValueError, TypeError):

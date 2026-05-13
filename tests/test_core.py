@@ -36,10 +36,10 @@ def test_sign_and_verify_identity():
     
     # Deterministic test payload (Test Vector 01)
     identity_metadata = {
-        "@context": "https://litzki-systems.org/protocol/v1.5",
+        "@context": "https://litzki-systems.com/protocol/v1.5",
         "@type": "SovereignIdentity",
         "uid": "urn:sovp:test-vector-01",
-        "canonical_url": "https://test.litzki-systems.org"
+        "canonical_url": "https://test.litzki-systems.com"
     }
     
     # Generate signature
