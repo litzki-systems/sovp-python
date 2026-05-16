@@ -18,7 +18,7 @@ SOVP answers one question deterministically: does this data originate from the d
 It does **not** validate semantic accuracy or truthfulness. It validates identity and integrity only.
 
 ```
-Psi_core = Verify(K_pub, sigma, H(JCS(M)))
+Psi_core = Verify(K_pub, sigma, JCS(M))
 ```
 
 `Psi_core = 1` — source verified, proceed with ingestion.  
@@ -69,11 +69,16 @@ print(private_key_b64)  # keep this secret
 from sovp.core import sign_identity
 import json
 
+# Non-proof fields only — integrity_proof is always excluded from the signed scope
+# (draft Section 4 MUST). sign_identity() will strip it automatically if present.
 metadata = {
-    "@context": "https://litzki-systems.com/protocol/v1.5",
+    "@context": "https://litzki-systems.com/protocol/v1.4",
     "@type": "SovereignIdentity",
-    "uid": "urn:sovp:your-entity-id",
-    "canonical_url": "https://yourdomain.com"
+    "entity": {
+        "uid": "urn:sovp:your-entity-id",
+        "canonical_url": "https://yourdomain.com",
+        "verification_method": "Ed25519"
+    }
 }
 
 signature = sign_identity(private_key_b64, metadata)
@@ -91,14 +96,19 @@ with open("sovp-identity.json", "w") as f:
     json.dump(signed_payload, f, indent=2)
 ```
 
-> Sign only the fields outside `integrity_proof`. The signature cannot cover itself.
+> `sign_identity()` always strips `integrity_proof` before canonicalizing, so
+> callers may pass the full document or only the non-proof fields — the result
+> is identical. The signature cannot cover itself.
 
 #### Verify (Psi_core)
 
 ```python
 from sovp.core import verify_identity
 
-psi_core = verify_identity(metadata, signature, public_key_b64)
+# Pass the full document or the non-proof subset — both work identically.
+# Enable check_timestamp=True to enforce the 600-second validity window
+# (draft Section 7.2 SHOULD).
+psi_core = verify_identity(signed_payload, signature, public_key_b64, check_timestamp=True)
 
 if psi_core:
     print("Psi_core = 1: Verified.")
@@ -122,9 +132,9 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 |---|---|
 | Signatures | Ed25519 (RFC 8032) |
 | Canonicalization | JSON Canonicalization Scheme / JCS (RFC 8785) |
-| Hashing | Ed25519 pure mode — `sign(JCS(M))`, no pre-hash |
+| Hashing | Ed25519 pure mode (RFC 8032) — `sign(JCS(M))`, no external pre-hash applied |
 | Key distribution | DNS TXT at `_sovp.yourdomain.tld` |
-| Replay protection | `created` + optional `nonce` in `integrity_proof` (parsing not yet validated — see Roadmap) |
+| Replay protection | `created` timestamp validation (600 s window, `check_timestamp=True`); nonce deduplication not yet implemented — see Roadmap |
 
 ---
 
@@ -132,7 +142,7 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 
 ```json
 {
-  "@context": "https://litzki-systems.com/protocol/v1.5",
+  "@context": "https://litzki-systems.com/protocol/v1.4",
   "@type": "SovereignIdentity",
   "entity": {
     "uid": "urn:sovp:your-entity-id",
@@ -144,9 +154,16 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
     "created": "2026-03-19T10:00:00Z",
     "public_key_ref": "dns:txt:_sovp.yourdomain.tld",
     "nonce": "optional-unique-string"
+  },
+  "parameters": {
+    "entropy_threshold": 0.12,
+    "determinism_score": 0.98
   }
 }
 ```
+
+> **Note:** `parameters` is non-normative and MUST NOT be used for trust
+> decisions (draft Section 4). It is excluded from the signed scope.
 
 Serve this file at `https://yourdomain.com/.well-known/sovp-identity.json`.
 
@@ -172,7 +189,8 @@ Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the
 | CLI (`generate-keypair`, `sign`, `verify`) | Implemented |
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Not yet implemented |
 | DNS + HTTP resolution in `SOVPValidator` | Not yet implemented |
-| Replay protection (timestamp / nonce validation) | Not yet implemented |
+| Replay protection (timestamp validation, `check_timestamp=True`) | Implemented (`verify_identity`) |
+| Replay protection (nonce deduplication) | Not yet implemented |
 | RFC conformance test vectors | Not yet implemented |
 | IETF Internet-Draft | [draft-litzki-sovp-05](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — submitted |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
