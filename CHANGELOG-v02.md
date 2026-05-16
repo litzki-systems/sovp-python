@@ -38,3 +38,13 @@ Fix: Add: "Implementations MUST use an RFC 8785-compliant JCS library. Floating-
 ## 9. Introduction or Appendix — Reference Implementation Scope Statement
 Problem: The Python reference implementation provides signing/verification primitives only. DNS resolution, HTTP retrieval, and Mode B gateway behavior are absent but not disclosed in the draft.
 Fix: Add: "The reference implementation provides signing and verification primitives only. Full protocol execution including DNS resolution and HTTP retrieval is implementation-defined."
+
+## 10. Section 4 — Vendor Extension Objects (new normative note)
+Problem: Implementations may include additional vendor-specific objects in
+sovp-identity.json (e.g. scan results, scores). The draft currently provides
+no guidance on how these interact with the signed scope or trust decisions.
+Fix: Add the following note to Section 4, after the parameters object
+description: "Implementations MAY include additional vendor-specific objects
+in the sovp-identity.json document. Such objects MUST NOT be included in the
+signed scope and MUST NOT be used as a basis for trust decisions by
+Validating Agents."
