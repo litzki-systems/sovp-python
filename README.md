@@ -24,6 +24,8 @@ Psi_core = Verify(K_pub, sigma, JCS(M))
 `Psi_core = 1` — source verified, proceed with ingestion.  
 `Psi_core = 0` — verification failed, ingestion blocked.
 
+> **Scope of this reference implementation:** This library provides Ed25519 signing and verification primitives for SOVP identity documents. Full protocol execution — including DNS TXT record resolution, HTTP retrieval of `/.well-known/sovp-identity.json`, and Mode B gateway behavior — is implementation-defined and not included in this package.
+
 ---
 
 ## How is this different from DANE or DIDs?
