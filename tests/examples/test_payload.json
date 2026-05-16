@@ -1,6 +1,9 @@
 {
-  "@context": "https://litzki-systems.com/protocol/v1.5",
+  "@context": "https://litzki-systems.com/protocol/v1.4",
   "@type": "SovereignIdentity",
-  "uid": "urn:sovp:cli-test-01",
-  "canonical_url": "https://test.litzki-systems.com"
+  "entity": {
+    "uid": "urn:sovp:cli-test-01",
+    "canonical_url": "https://test.litzki-systems.com",
+    "verification_method": "Ed25519"
+  }
 }
