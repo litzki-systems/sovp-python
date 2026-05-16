@@ -3,7 +3,7 @@
 
 import pytest
 from datetime import datetime, timezone, timedelta
-from sovp.core import generate_keypair, sign_identity, verify_identity
+from sovp.core import generate_keypair, sign_identity, verify_identity, generate_identity_document
 
 
 def test_keypair_generation():
@@ -208,3 +208,44 @@ def test_verify_rejects_malformed_inputs():
 
     assert verify_identity(metadata, "not-valid-base64!!!", pub) is False
     assert verify_identity(metadata, signature, "not-valid-base64!!!") is False
+
+
+def test_generate_identity_document_no_scan():
+    """
+    Verifies generate_identity_document() produces a valid, verifiable document
+    with the correct structure and no scan key when scan is omitted.
+    """
+    priv, pub = generate_keypair()
+    doc = generate_identity_document(
+        private_key_b64=priv,
+        entity_uid="urn:sovp:test-gendoc-01",
+        canonical_url="https://test.litzki-systems.com",
+    )
+
+    assert doc["@type"] == "SovereignIdentity"
+    assert "scan" not in doc
+    assert "integrity_proof" in doc
+
+    signature = doc["integrity_proof"]["signature"]
+    assert verify_identity(doc, signature, pub) is True
+
+
+def test_generate_identity_document_with_scan():
+    """
+    Verifies generate_identity_document() appends the scan object outside the
+    signed scope. verify_identity() must still pass (scan excluded from signing).
+    """
+    priv, pub = generate_keypair()
+    scan_data = {"verdict": "CERTIFIED"}
+    doc = generate_identity_document(
+        private_key_b64=priv,
+        entity_uid="urn:sovp:test-gendoc-02",
+        canonical_url="https://test.litzki-systems.com",
+        scan=scan_data,
+    )
+
+    assert "scan" in doc
+    assert doc["scan"] == {"verdict": "CERTIFIED"}
+
+    signature = doc["integrity_proof"]["signature"]
+    assert verify_identity(doc, signature, pub) is True
