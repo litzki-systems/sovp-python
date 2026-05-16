@@ -10,7 +10,7 @@ authors = [{name = "Litzki Systems LLC"}]
 license = {text = "Apache-2.0"}
 dependencies = [
     "cryptography",
-    "canonicaljson",
+    "jcs",
 ]
 
 [project.scripts]

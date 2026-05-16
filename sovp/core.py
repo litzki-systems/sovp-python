@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
-import canonicaljson
+import jcs
 from datetime import datetime, timezone, timedelta
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
@@ -56,7 +56,7 @@ def sign_identity(private_key_b64: str, identity_metadata: dict) -> str:
     # Per draft Section 4 MUST: "Implementations MUST canonicalize only the
     # non-proof fields of M when computing or verifying JCS(M)."
     payload = {k: v for k, v in identity_metadata.items() if k != "integrity_proof"}
-    canonical_data = canonicaljson.encode_canonical_json(payload)
+    canonical_data = jcs.canonicalize(payload)
     signature = private_key.sign(canonical_data)
     return base64.b64encode(signature).decode('utf-8')
 
@@ -103,7 +103,7 @@ def verify_identity(
 
         # Per draft Section 4 MUST: canonicalize only the non-proof fields.
         payload = {k: v for k, v in identity_metadata.items() if k != "integrity_proof"}
-        canonical_data = canonicaljson.encode_canonical_json(payload)
+        canonical_data = jcs.canonicalize(payload)
         public_key.verify(sig_bytes, canonical_data)
 
         # Per draft Section 7.2 SHOULD: reject stale timestamps.
