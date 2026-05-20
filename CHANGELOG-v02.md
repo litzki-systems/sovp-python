@@ -48,3 +48,19 @@ description: "Implementations MAY include additional vendor-specific objects
 in the sovp-identity.json document. Such objects MUST NOT be included in the
 signed scope and MUST NOT be used as a basis for trust decisions by
 Validating Agents."
+
+## 11. Section 6 or Appendix — Managed Signing Operational Mode
+
+Problem: The draft assumes the publisher holds and manages their own private key.
+Production deployments may use a managed signing model, where a trusted third-party
+provider (e.g. a SOVP validator service) generates and holds the private key on behalf
+of the publisher, and delivers only the public key and signed sovp-identity.json to
+the domain operator.
+
+Fix: Add a note acknowledging this as a valid operational variant:
+"Implementations MAY offer a managed signing mode in which key generation and signing
+are performed by a trusted service provider on behalf of the publisher. In this mode,
+the publisher receives the public key for DNS publication and the signed
+sovp-identity.json for deployment. The cryptographic verification procedure for
+Validating Agents remains identical. Operators SHOULD document whether their
+deployment uses self-managed or provider-managed key custody."
