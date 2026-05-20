@@ -2,7 +2,7 @@
 
 **sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp) — a pre-ingestion verification protocol that lets LLMs and autonomous agents cryptographically confirm the identity and integrity of a data source before parsing it. It exists because existing mechanisms (DANE, DIDs, TLS) operate at the wrong layer for agentic pipelines: SOVP sits at Layer 0, before the body is read. To get started: clone the repo and run `pip install -e .` — this exposes both a `sovp.core` Python API and a `sovp` CLI with three commands.
 
-> **Protocol specification:** [draft-litzki-sovp-05](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
+> **Protocol specification:** [draft-litzki-sovp-01](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/)
