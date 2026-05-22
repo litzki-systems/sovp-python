@@ -194,7 +194,7 @@ Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the
 | Replay protection (timestamp validation, `check_timestamp=True`) | Implemented (`verify_identity`) |
 | Replay protection (nonce deduplication) | Not yet implemented |
 | RFC conformance test vectors | Not yet implemented |
-| IETF Internet-Draft | [draft-litzki-sovp-05](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — submitted |
+| IETF Internet-Draft | [draft-litzki-sovp-01](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — submitted |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
 
 ---
