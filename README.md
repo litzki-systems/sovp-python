@@ -4,6 +4,7 @@
 
 > **Protocol specification:** [draft-litzki-sovp-01](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 
+[![CI](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml/badge.svg)](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--litzki--sovp--05-lightgrey.svg)](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
@@ -48,6 +49,42 @@ pip install -e .
 ```
 
 This installs the `sovp` CLI and the `sovp.core` library. Dependencies (`cryptography`, `canonicaljson`) are declared in `pyproject.toml`.
+
+---
+
+## End-to-end example
+
+The fastest way to see SOVP in action — generate a keypair, sign an identity document, verify it, and watch tamper detection fire:
+
+```python
+from sovp.core import generate_keypair, generate_identity_document, verify_identity
+
+# 1. Generate keys — publish public_key_b64 in your DNS TXT record
+private_key_b64, public_key_b64 = generate_keypair()
+
+# 2. Build and sign — serve this JSON at /.well-known/sovp-identity.json
+document = generate_identity_document(
+    private_key_b64=private_key_b64,
+    entity_uid="urn:sovp:example-entity",
+    canonical_url="https://example.com",
+)
+
+# 3. Verify (Psi_core)
+signature = document["integrity_proof"]["signature"]
+psi_core = verify_identity(document, signature, public_key_b64)
+print("Psi_core =", 1 if psi_core else 0)   # → 1
+
+# 4. Tamper detection
+document["entity"]["canonical_url"] = "https://attacker.com"
+psi_core = verify_identity(document, signature, public_key_b64)
+print("Psi_core =", 1 if psi_core else 0)   # → 0  (blocked)
+```
+
+A runnable version with annotated output is in [`examples/end_to_end.py`](examples/end_to_end.py):
+
+```bash
+python examples/end_to_end.py
+```
 
 ---
 

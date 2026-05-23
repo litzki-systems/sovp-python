@@ -13,5 +13,11 @@ dependencies = [
     "jcs",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [project.scripts]
 sovp = "sovp.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
