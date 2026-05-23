@@ -232,7 +232,7 @@ Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
 | DNS + HTTP resolution in `SOVPValidator` | Planned |
 | RFC conformance test vectors | Planned |
-| IETF Internet-Draft | [draft-litzki-sovp-01](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — submitted |
+| IETF Internet-Draft | [draft-litzki-sovp-01](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active (since 2026-05-14) |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
 
 ---
