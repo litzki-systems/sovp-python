@@ -8,8 +8,8 @@ Problem: Timestamp validation is now implemented via check_timestamp=True in ver
 Fix: Remove the note. Replace with: "Timestamp validation is implemented in the reference implementation via the check_timestamp parameter of verify_identity(). Nonce-based deduplication remains a future work item."
 
 ## 2. Section 4 — Resolve @context version (v1.4 vs v1.5)
-Problem: Draft shows v1.4; reference implementation used v1.5. Tests realigned to v1.4 for now.
-Fix: Confirm canonical version. Update draft and implementation to single consistent value. Define versioning policy (what a context version bump implies).
+Status: **Resolved.** v1.4 is confirmed canonical. All code, tests, and documentation now consistently use `https://litzki-systems.com/protocol/v1.4`. The v1.5 reference was a transient inconsistency; the draft and implementation are aligned.
+Remaining: Define a versioning policy (what a context version bump implies) — deferred to draft-litzki-sovp-03.
 
 ## 3. Section 6 / New sub-section — DNS TXT Record Format (normative)
 Problem: Section 9.1 registers the _sovp DNS label but specifies no TXT record value format. README uses v=SOVP1; k=<base64> non-normatively.
