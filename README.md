@@ -43,6 +43,12 @@ Psi_core = Verify(K_pub, sigma, JCS(M))
 ## Installation
 
 ```bash
+pip install sovp
+```
+
+For development, clone the repo instead:
+
+```bash
 git clone https://github.com/litzki-systems/sovp-python.git
 cd sovp-python
 pip install -e .
