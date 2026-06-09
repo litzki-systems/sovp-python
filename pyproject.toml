@@ -12,6 +12,8 @@ license = {text = "Apache-2.0"}
 dependencies = [
     "cryptography",
     "jcs",
+    "dnspython",
+    "requests",
 ]
 
 [project.optional-dependencies]

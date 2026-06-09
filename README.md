@@ -235,9 +235,9 @@ Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the
 | CLI (`generate-keypair`, `sign`, `verify`) | Implemented |
 | Replay protection — timestamp validation (`check_timestamp=True`) | Implemented |
 | Replay protection — nonce deduplication | Planned |
+| DNS + HTTP resolution in `SOVPValidator` | Implemented — see `sovp.resolver` |
+| RFC conformance test vectors | Implemented — see `tests/test_vectors.py` |
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
-| DNS + HTTP resolution in `SOVPValidator` | Planned |
-| RFC conformance test vectors | Planned |
 | IETF Internet-Draft | [draft-litzki-sovp-02](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active (updated 2026-06-07) |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
 
