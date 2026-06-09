@@ -1,0 +1,12 @@
+name = "sovp-identity"
+main = "index.mjs"
+compatibility_date = "2024-01-01"
+workers_dev = false
+
+[[routes]]
+pattern = "litzki-systems.com/.well-known/sovp-identity.json"
+zone_name = "litzki-systems.com"
+
+[[routes]]
+pattern = "litzki-systems.com/sovp-identity.json"
+zone_name = "litzki-systems.com"
