@@ -226,6 +226,29 @@ Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the
 
 ---
 
+## Live validation example
+
+To validate a live production domain (requires DNS + network access):
+
+```bash
+python examples/validate_live.py
+```
+
+This runs the full pipeline against `litzki-systems.com`: DNS TXT resolution, HTTP fetch of `/.well-known/sovp-identity.json`, and Ed25519 verification.
+
+Expected output:
+```
+SOVP Live Validation — litzki-systems.com
+Domain:          litzki-systems.com
+Psi_core:        1
+Public key ref:  dns:txt:_sovp.litzki-systems.com
+Entity UID:      urn:sovp:litzki-systems.com
+Canonical URL:   https://litzki-systems.com
+Result: VERIFIED — identity and integrity confirmed.
+```
+
+---
+
 ## Roadmap
 
 | Feature | Status |
