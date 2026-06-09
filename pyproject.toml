@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sovp"
-version = "0.1.0-alpha"
+version = "1.0.0"
 description = "Sovereign Validation Protocol (SOVP) Core Engine"
 authors = [{name = "Litzki Systems LLC"}]
 license = {text = "Apache-2.0"}

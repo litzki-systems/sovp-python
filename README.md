@@ -2,12 +2,12 @@
 
 **sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp) — a pre-ingestion verification protocol that lets LLMs and autonomous agents cryptographically confirm the identity and integrity of a data source before parsing it. It exists because existing mechanisms (DANE, DIDs, TLS) operate at the wrong layer for agentic pipelines: SOVP sits at Layer 0, before the body is read. To get started: clone the repo and run `pip install -e .` — this exposes both a `sovp.core` Python API and a `sovp` CLI with three commands.
 
-> **Protocol specification:** [draft-litzki-sovp-01](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
+> **Protocol specification:** [draft-litzki-sovp-02](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 
 [![CI](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml/badge.svg)](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![IETF Draft](https://img.shields.io/badge/IETF-draft--litzki--sovp--05-lightgrey.svg)](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
+[![IETF Draft](https://img.shields.io/badge/IETF-draft--litzki--sovp--02-lightgrey.svg)](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 [![Status](https://img.shields.io/badge/Status-Patent_Pending-orange.svg)](https://litzki-systems.com/sovp)
 
 ---
@@ -115,7 +115,7 @@ from sovp.core import sign_identity
 import json
 
 # Non-proof fields only — integrity_proof is always excluded from the signed scope
-# (draft Section 4 MUST). sign_identity() will strip it automatically if present.
+# (draft-litzki-sovp-02, Section 4 MUST). sign_identity() will strip it automatically if present.
 metadata = {
     "@context": "https://litzki-systems.com/protocol/v1.4",
     "@type": "SovereignIdentity",
@@ -238,7 +238,7 @@ Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
 | DNS + HTTP resolution in `SOVPValidator` | Planned |
 | RFC conformance test vectors | Planned |
-| IETF Internet-Draft | [draft-litzki-sovp-01](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active (since 2026-05-14) |
+| IETF Internet-Draft | [draft-litzki-sovp-02](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active (updated 2026-06-07) |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
 
 ---
