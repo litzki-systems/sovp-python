@@ -2,7 +2,7 @@
 
 **sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp) — a pre-ingestion verification protocol that lets LLMs and autonomous agents cryptographically confirm the identity and integrity of a data source before parsing it. It exists because existing mechanisms (DANE, DIDs, TLS) operate at the wrong layer for agentic pipelines: SOVP sits at Layer 0, before the body is read. To get started: clone the repo and run `pip install -e .` — this exposes both a `sovp.core` Python API and a `sovp` CLI with three commands.
 
-> **Protocol specification:** [draft-litzki-sovp-02](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
+> **Protocol specification:** [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 
 [![CI](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml/badge.svg)](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -261,7 +261,7 @@ Result: VERIFIED — identity and integrity confirmed.
 | DNS + HTTP resolution in `SOVPValidator` | Implemented — see `sovp.resolver` |
 | RFC conformance test vectors | Implemented — see `tests/test_vectors.py` |
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
-| IETF Internet-Draft | [draft-litzki-sovp-02](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active (updated 2026-06-07) |
+| IETF Internet-Draft | [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active (updated 2026-06-09) |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
 
 ---
