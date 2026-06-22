@@ -8,7 +8,7 @@ version = "1.0.3"
 readme = "README.md"
 description = "Sovereign Validation Protocol (SOVP) Core Engine"
 authors = [{name = "Litzki Systems LLC"}]
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 dependencies = [
     "cryptography",
     "jcs",
@@ -21,6 +21,9 @@ dev = ["pytest"]
 
 [project.scripts]
 sovp = "sovp.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sovp*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
