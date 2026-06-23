@@ -178,10 +178,8 @@ def generate_identity_document(
         },
     }
 
-    priv_bytes = base64.b64decode(private_key_b64)
-    private_key = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
     canonical_data = jcs.canonicalize(non_proof)
-    signature = base64.b64encode(private_key.sign(canonical_data)).decode("utf-8")
+    signature = sign_identity(private_key_b64, non_proof)
     digest = hashlib.sha256(canonical_data).hexdigest()
 
     document = {
