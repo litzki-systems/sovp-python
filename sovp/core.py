@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import jcs
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -13,7 +14,7 @@ from urllib.parse import urlparse
 # Per draft Section 4: integrity_proof is excluded because the signature
 # cannot cover itself. Per draft V02 item 10: vendor extension objects
 # (e.g. scan) MUST NOT be included in the signed scope.
-_OUT_OF_SCOPE_KEYS = frozenset({"integrity_proof", "scan"})
+_OUT_OF_SCOPE_KEYS = frozenset({"integrity_proof", "scan", "contentAddress"})
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 from cryptography.exceptions import InvalidSignature
@@ -181,9 +182,14 @@ def generate_identity_document(
     private_key = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
     canonical_data = jcs.canonicalize(non_proof)
     signature = base64.b64encode(private_key.sign(canonical_data)).decode("utf-8")
+    digest = hashlib.sha256(canonical_data).hexdigest()
 
     document = {
         **non_proof,
+        "contentAddress": {
+            "alg": "sha256",
+            "digest": digest,
+        },
         "integrity_proof": {
             "signature": signature,
             "created": created,
