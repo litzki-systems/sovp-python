@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to the sovp Python package are documented here.
-Protocol specification: [draft-litzki-sovp-02](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
+Protocol specification: [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 
 ## [1.0.3] — 2026-06-09
 
