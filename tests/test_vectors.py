@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # SOVP RFC Test Vector Set 1 — do not modify
-# Generated 2026-06-09 against sovp-python 1.0.1 / draft-litzki-sovp-02
+# Generated 2026-06-09 against sovp-python 1.0.1 / draft-litzki-sovp-03
 # Any conforming SOVP implementation must produce Psi_core = 1 for VECTOR_1.
 
 from datetime import datetime, timezone, timedelta

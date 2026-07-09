@@ -9,7 +9,7 @@ This is the reference implementation of an open protocol. Contributions that imp
 - **Roadmap items** — features listed in the README Roadmap table
 - **Documentation** — clarifications, typo fixes, example corrections
 
-If you want to propose a change to the protocol itself (not just this implementation), the right venue is the IETF draft: [draft-litzki-sovp-05](https://litzki-systems.com/sovp).
+If you want to propose a change to the protocol itself (not just this implementation), the right venue is the IETF draft: [draft-litzki-sovp-03](https://litzki-systems.com/sovp).
 
 ## How to submit a change
 
