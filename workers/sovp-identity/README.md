@@ -3,7 +3,7 @@
 Cloudflare Worker reference deployment for a spec-compliant SOVP identity endpoint.
 
 Serves `/.well-known/sovp-identity.json` and `/sovp-identity.json` with the correct
-headers and a `SovereignIdentity` document signed per draft-litzki-sovp-02 Section 4.
+headers and a `SovereignIdentity` document signed per draft-litzki-sovp-03 Section 4.
 
 ## What this demonstrates
 
@@ -37,4 +37,4 @@ wrangler deploy
 
 ## Protocol specification
 
-[draft-litzki-sovp-02](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
+[draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
