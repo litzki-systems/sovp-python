@@ -173,6 +173,62 @@ def test_timestamp_validation_accepts_fresh():
     assert verify_identity(fresh_document, signature, pub, check_timestamp=True) is True
 
 
+def test_timestamp_validation_rejects_missing_created():
+    """
+    Fail-closed: a missing integrity_proof.created must be rejected when
+    check_timestamp=True, not treated as automatically valid. Otherwise a
+    replayed signature without a created field would bypass Section 7.2.
+    """
+    priv, pub = generate_keypair()
+
+    metadata = {
+        "@context": "https://litzki-systems.com/protocol/v1.4",
+        "@type": "SovereignIdentity",
+        "entity": {
+            "uid": "urn:sovp:test-timestamp-03",
+            "canonical_url": "https://test.litzki-systems.com",
+            "verification_method": "Ed25519"
+        }
+    }
+
+    signature = sign_identity(priv, metadata)
+
+    document_no_created = {
+        **metadata,
+        "integrity_proof": {
+            "signature": signature,
+            "public_key_ref": "dns:txt:_sovp.test.litzki-systems.com"
+        }
+    }
+
+    assert verify_identity(document_no_created, signature, pub, check_timestamp=False) is True
+    assert verify_identity(document_no_created, signature, pub, check_timestamp=True) is False
+
+
+def test_timestamp_validation_rejects_malformed_integrity_proof():
+    """
+    A non-dict integrity_proof (attacker-controlled, since it's excluded from
+    the signed payload) must return False, not raise AttributeError.
+    """
+    priv, pub = generate_keypair()
+
+    metadata = {
+        "@context": "https://litzki-systems.com/protocol/v1.4",
+        "@type": "SovereignIdentity",
+        "entity": {
+            "uid": "urn:sovp:test-timestamp-04",
+            "canonical_url": "https://test.litzki-systems.com",
+            "verification_method": "Ed25519"
+        }
+    }
+
+    signature = sign_identity(priv, metadata)
+
+    for bogus_proof in ["not-a-dict", ["list"], None, 42]:
+        document = {**metadata, "integrity_proof": bogus_proof}
+        assert verify_identity(document, signature, pub, check_timestamp=True) is False
+
+
 def test_verify_rejects_wrong_key():
     """Ensures Psi_core = 0 when the wrong public key is supplied."""
     priv, pub = generate_keypair()

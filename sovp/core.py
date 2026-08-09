@@ -120,16 +120,19 @@ def verify_identity(
         # Per draft Section 7.2 SHOULD: reject stale timestamps.
         if check_timestamp:
             proof = identity_metadata.get("integrity_proof", {})
+            if not isinstance(proof, dict):
+                return False
             created_str = proof.get("created")
-            if created_str is not None:
-                created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                age = datetime.now(timezone.utc) - created
-                if age > timedelta(seconds=max_age_seconds):
-                    return False
+            if created_str is None:
+                return False
+            created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+            age = datetime.now(timezone.utc) - created
+            if age > timedelta(seconds=max_age_seconds):
+                return False
 
         return True
 
-    except (InvalidSignature, ValueError, TypeError):
+    except (InvalidSignature, ValueError, TypeError, AttributeError):
         return False
 
 

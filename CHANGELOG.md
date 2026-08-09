@@ -3,6 +3,12 @@
 All notable changes to the sovp Python package are documented here.
 Protocol specification: [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 
+## [1.0.4] — 2026-08-09
+
+### Fixed
+- `sovp/core.py` — `verify_identity()` no longer fails open when `integrity_proof.created` is missing; with `check_timestamp=True` a missing `created` is now a rejection (Psi_core = 0), closing a replay bypass of draft Section 7.2
+- `sovp/core.py` — `verify_identity()` no longer raises `AttributeError` when `integrity_proof` is a non-dict value (attacker-controlled since it's excluded from the signed payload); now returns `False` per the documented `bool`-only contract
+
 ## [1.0.3] — 2026-06-09
 
 ### Added
