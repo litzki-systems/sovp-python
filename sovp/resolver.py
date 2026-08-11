@@ -105,7 +105,7 @@ def validate_domain(domain: str, timeout: int = 10) -> dict:
     public_key_b64 = resolve_dns_pubkey(domain)
 
     proof = document.get("integrity_proof", {})
-    signature_b64 = proof.get("signature", "")
+    signature_b64 = proof.get("signature", "") if isinstance(proof, dict) else ""
 
     psi_core = 1 if verify_identity(document, signature_b64, public_key_b64) else 0
 
