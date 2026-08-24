@@ -3,6 +3,13 @@
 All notable changes to the sovp Python package are documented here.
 Protocol specification: [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 
+## [1.0.4] — 2026-07-09
+
+### Fixed
+- Packaging: `sovp` source modules are now included in the built wheel
+  (`[tool.setuptools.packages.find] include = ["sovp*"]`), so `pip install sovp`
+  ships the importable `sovp.core`, `sovp.cli`, and `sovp.resolver` modules.
+
 ## [1.0.3] — 2026-06-09
 
 ### Added
