@@ -281,6 +281,7 @@ Result: VERIFIED — identity and integrity confirmed.
 | DNS + HTTP resolution in `SOVPValidator` | Implemented — see `sovp.resolver` |
 | RFC conformance test vectors | Implemented — see `tests/test_vectors.py` |
 | Live validation (`validate_live.py`) | Implemented |
+| AgenTrust Marketplace integration | Implemented — see [sovp-agentrust-bridge](https://github.com/litzki-systems/sovp-agentrust-bridge) |
 | Replay protection — nonce deduplication | Planned |
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
 | IETF Internet-Draft | [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active |
