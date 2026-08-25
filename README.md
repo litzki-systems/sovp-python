@@ -2,12 +2,12 @@
 
 **sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp) — a pre-ingestion verification protocol that lets LLMs and autonomous agents cryptographically confirm the identity and integrity of a data source before parsing it. It exists because existing mechanisms (DANE, DIDs, TLS) operate at the wrong layer for agentic pipelines: SOVP sits at Layer 0, before the body is read. To get started: clone the repo and run `pip install -e .` — this exposes both a `sovp.core` Python API and a `sovp` CLI with three commands.
 
-> **Protocol specification:** [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
+> **Protocol specification:** [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 
 [![CI](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml/badge.svg)](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![IETF Draft](https://img.shields.io/badge/IETF-draft--litzki--sovp--03-lightgrey.svg)](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
+[![IETF Draft](https://img.shields.io/badge/IETF-draft--litzki--sovp-lightgrey.svg)](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 [![Status](https://img.shields.io/badge/Status-Patent_Pending-orange.svg)](https://litzki-systems.com/sovp)
 
 ---
@@ -130,7 +130,7 @@ from sovp.core import sign_identity
 import json
 
 # Non-proof fields only — integrity_proof is always excluded from the signed scope
-# (draft-litzki-sovp-03, Section 4 MUST). sign_identity() will strip it automatically if present.
+# (draft Section 4 MUST). sign_identity() will strip it automatically if present.
 metadata = {
     "@context": "https://litzki-systems.com/protocol/v1.4",
     "@type": "SovereignIdentity",
@@ -225,7 +225,7 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 }
 ```
 
-> **`contentAddress` (optional, draft-litzki-sovp-03 Section 4):** `contentAddress.digest` is a SHA-256 hash computed over the JCS-canonical representation of all non-proof, non-`contentAddress` fields. A verifier independently recomputes it as `sha256(JCS(doc_without_proof_and_contentAddress))` and compares the hex string. This lets downstream consumers (e.g. an `ai-catalog.json` entry) bind a catalog record to the exact document bytes without re-running the Ed25519 signature check. **`contentAddress` is excluded from the Ed25519 signed scope** — it is computed after signing, from the same byte range the signature covers.
+> **`contentAddress` (optional, draft Section 4):** `contentAddress.digest` is a SHA-256 hash computed over the JCS-canonical representation of all non-proof, non-`contentAddress` fields. A verifier independently recomputes it as `sha256(JCS(doc_without_proof_and_contentAddress))` and compares the hex string. This lets downstream consumers (e.g. an `ai-catalog.json` entry) bind a catalog record to the exact document bytes without re-running the Ed25519 signature check. **`contentAddress` is excluded from the Ed25519 signed scope** — it is computed after signing, from the same byte range the signature covers.
 
 > **Note:** `parameters` is non-normative and MUST NOT be used for trust
 > decisions (draft Section 4). It is excluded from the signed scope.
@@ -277,11 +277,13 @@ Result: VERIFIED — identity and integrity confirmed.
 | `sovp.core` document builder (`generate_identity_document`) | Implemented |
 | CLI (`generate-keypair`, `sign`, `verify`) | Implemented |
 | Replay protection — timestamp validation (`check_timestamp=True`) | Implemented |
-| Replay protection — nonce deduplication | Planned |
+| `contentAddress` digest (SHA-256 over JCS bytes) | Implemented |
 | DNS + HTTP resolution in `SOVPValidator` | Implemented — see `sovp.resolver` |
 | RFC conformance test vectors | Implemented — see `tests/test_vectors.py` |
+| Live validation (`validate_live.py`) | Implemented |
+| Replay protection — nonce deduplication | Planned |
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
-| IETF Internet-Draft | [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active (updated 2026-06-09) |
+| IETF Internet-Draft | [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active |
 | ARD `trustManifest` type registration | In progress — [ards-project/ard-spec #41](https://github.com/ards-project/ard-spec/issues/41) |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
 
