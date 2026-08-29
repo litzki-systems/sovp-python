@@ -9,6 +9,11 @@ Protocol specification: [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/
 - `sovp/core.py` — `verify_identity()` no longer fails open when `integrity_proof.created` is missing; with `check_timestamp=True` a missing `created` is now a rejection (Psi_core = 0), closing a replay bypass of draft Section 7.2
 - `sovp/core.py` — `verify_identity()` no longer raises `AttributeError` when `integrity_proof` is a non-dict value (attacker-controlled since it's excluded from the signed payload); now returns `False` per the documented `bool`-only contract
 
+## [1.0.5] — 2026-08-29
+
+### Fixed
+- `pyproject.toml` — capped the unpinned `cryptography` dependency to `>=38.0.0,!=40.0.0,!=40.0.1,<42`. A global `pip install sovp` on a server also running `certbot`/`pyOpenSSL` (OS-packaged) could pull a `cryptography` release newer than pyOpenSSL supports, shadow the OS-packaged version, and break certbot with `AttributeError: module 'lib' has no attribute 'GEN_EMAIL'`. The cap matches the range pyOpenSSL 23.x (Ubuntu 24.04's apt version) actually declares support for.
+
 ## [1.0.4] — 2026-07-09
 
 ### Fixed
