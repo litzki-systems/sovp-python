@@ -216,7 +216,8 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
     "nonce": "optional-unique-string"
   },
   "contentAddress": {
-    "digest": "sha256:<hex-encoded SHA-256 over JCS-canonical bytes of the non-proof fields>"
+    "alg": "sha256",
+    "digest": "<hex-encoded SHA-256 over JCS-canonical bytes of the non-proof fields>"
   },
   "parameters": {
     "entropy_threshold": 0.12,
