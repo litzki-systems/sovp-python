@@ -194,7 +194,7 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 | Canonicalization | JSON Canonicalization Scheme / JCS (RFC 8785) |
 | Hashing | Ed25519 pure mode (RFC 8032) — `sign(JCS(M))`, no external pre-hash applied |
 | Key distribution | DNS TXT at `_sovp.yourdomain.tld` |
-| Replay protection | `created` timestamp validation (600 s window, `check_timestamp=True`); nonce deduplication not yet implemented — see Roadmap |
+| Replay protection | `freshness.created` timestamp validation (600 s window, `check_timestamp=True`), cryptographically bound to the signature since schema v2.0; nonce deduplication not yet implemented — see Roadmap |
 
 ---
 
@@ -202,18 +202,21 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 
 ```json
 {
-  "@context": "https://litzki-systems.com/protocol/v1.4",
+  "@context": "https://litzki-systems.com/protocol/v2.0",
   "@type": "SovereignIdentity",
   "entity": {
     "uid": "urn:sovp:your-entity-id",
     "canonical_url": "https://yourdomain.com",
     "verification_method": "Ed25519"
   },
+  "freshness": {
+    "created": "2026-03-19T10:00:00Z",
+    "nonce": "optional-unique-string",
+    "expiresAt": "2026-06-17T10:00:00Z"
+  },
   "integrity_proof": {
     "signature": "<Ed25519 signature, base64>",
-    "created": "2026-03-19T10:00:00Z",
-    "public_key_ref": "dns:txt:_sovp.yourdomain.tld",
-    "nonce": "optional-unique-string"
+    "public_key_ref": "dns:txt:_sovp.yourdomain.tld"
   },
   "contentAddress": {
     "alg": "sha256",
@@ -225,6 +228,16 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
   }
 }
 ```
+
+> **`freshness` (schema v2.0):** `created`, `nonce`, and `expiresAt` live in
+> this object, which IS part of the signed scope — unlike schema v1.4, where
+> these three fields sat inside `integrity_proof` and were therefore
+> forgeable without invalidating the signature (`integrity_proof` itself is
+> excluded from the signed scope). A v1.4 document's `expiresAt` in
+> particular could be pushed arbitrarily into the future by anyone able to
+> modify the served file, without breaking the signature. `verify_identity()`
+> reads `freshness.created` first and falls back to the unsigned
+> `integrity_proof.created` only for documents that predate this change.
 
 > **`contentAddress` (optional, draft Section 4):** `contentAddress.digest` is a SHA-256 hash computed over the JCS-canonical representation of all non-proof, non-`contentAddress` fields. A verifier independently recomputes it as `sha256(JCS(doc_without_proof_and_contentAddress))` and compares the hex string. This lets downstream consumers (e.g. an `ai-catalog.json` entry) bind a catalog record to the exact document bytes without re-running the Ed25519 signature check. **`contentAddress` is excluded from the Ed25519 signed scope** — it is computed after signing, from the same byte range the signature covers.
 
