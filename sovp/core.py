@@ -90,8 +90,13 @@ def verify_identity(
     subset; the result is identical.
 
     Per draft Section 7.2 SHOULD: when check_timestamp is True, rejects any
-    document whose integrity_proof.created timestamp is older than
-    max_age_seconds (default 600).
+    document whose created timestamp is older than max_age_seconds (default
+    600). Schema v2.0+: created/expiresAt/nonce live in the signed
+    "freshness" object; this is the primary read location. Schema < v2.0
+    (legacy): falls back to the unsigned integrity_proof.created field for
+    the transition window (draft Section 4 "Migration from v1.4") — this
+    fallback affects only timestamp freshness checking, never signature
+    verification.
 
     Args:
         identity_metadata (dict): The identity payload (full document or
@@ -99,7 +104,7 @@ def verify_identity(
         signature_b64 (str): The base64 encoded signature.
         public_key_b64 (str): The base64 encoded Ed25519 public key.
         check_timestamp (bool): When True, enforce the 600-second validity
-            window on the integrity_proof.created field (draft Section 7.2).
+            window on the freshness.created field (draft Section 7.2).
         max_age_seconds (int): Maximum acceptable age of the created timestamp
             in seconds. Default: 600 (per draft Section 7.2).
 
@@ -119,10 +124,16 @@ def verify_identity(
 
         # Per draft Section 7.2 SHOULD: reject stale timestamps.
         if check_timestamp:
-            proof = identity_metadata.get("integrity_proof", {})
-            if not isinstance(proof, dict):
-                return False
-            created_str = proof.get("created")
+            # Schema v2.0+: freshness.created is in the signed scope.
+            # Schema < v2.0 (legacy): fall back to integrity_proof.created,
+            # which is unsigned but is the only location that field exists
+            # in — this fallback only affects timestamp freshness checking,
+            # not signature verification, which already ran above.
+            freshness = identity_metadata.get("freshness", {})
+            created_str = freshness.get("created") if isinstance(freshness, dict) else None
+            if created_str is None:
+                proof = identity_metadata.get("integrity_proof", {})
+                created_str = proof.get("created") if isinstance(proof, dict) else None
             if created_str is None:
                 return False
             created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
@@ -142,15 +153,20 @@ def generate_identity_document(
     canonical_url: str,
     scan: dict | None = None,
     nonce: str | None = None,
-    context_version: str = "v1.4",
+    expires_at: str | None = None,
+    context_version: str = "v2.0",
 ) -> dict:
     """
     Builds, signs, and returns a complete sovp-identity.json document.
 
     The non-proof fields are canonicalized and signed per draft Section 4.
-    The scan object (if provided) is appended after the integrity_proof and
-    is excluded from the signed scope — consistent with draft V02 item 10:
-    vendor extension objects MUST NOT be included in the signed scope.
+    Schema v2.0+: created/expiresAt/nonce live in a "freshness" object that
+    IS part of the signed scope (schema < v2.0 kept them in integrity_proof,
+    which is excluded from the signed scope and therefore forgeable without
+    invalidating the signature). The scan object (if provided) is appended
+    after integrity_proof and is excluded from the signed scope — consistent
+    with draft V02 item 10: vendor extension objects MUST NOT be included in
+    the signed scope.
 
     Args:
         private_key_b64 (str): Base64 encoded Ed25519 private key.
@@ -160,7 +176,9 @@ def generate_identity_document(
             the signed scope. Omitted from the document when None.
         nonce (str | None): Replay-protection nonce. A uuid4 is generated
             when None.
-        context_version (str): Context version string. Default: "v1.4".
+        expires_at (str | None): ISO-8601 expiry timestamp for
+            freshness.expiresAt. Omitted from the document when None.
+        context_version (str): Context version string. Default: "v2.0".
 
     Returns:
         dict: The complete signed sovp-identity.json document.
@@ -169,6 +187,13 @@ def generate_identity_document(
     public_key_ref = f"dns:txt:_sovp.{domain}"
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     resolved_nonce = nonce if nonce is not None else str(uuid.uuid4())
+
+    freshness = {
+        "created": created,
+        "nonce": resolved_nonce,
+    }
+    if expires_at is not None:
+        freshness["expiresAt"] = expires_at
 
     # Non-proof payload — the only fields covered by the signature.
     non_proof = {
@@ -179,6 +204,7 @@ def generate_identity_document(
             "canonical_url": canonical_url,
             "verification_method": "Ed25519",
         },
+        "freshness": freshness,
     }
 
     canonical_data = jcs.canonicalize(non_proof)
@@ -193,9 +219,7 @@ def generate_identity_document(
         },
         "integrity_proof": {
             "signature": signature,
-            "created": created,
             "public_key_ref": public_key_ref,
-            "nonce": resolved_nonce,
         },
     }
 
