@@ -69,18 +69,19 @@ def resolve_dns_pubkey(domain: str) -> str:
         ) from exc
 
     for rdata in answers:
-        for txt_string in rdata.strings:
-            record = (
-                txt_string.decode("utf-8")
-                if isinstance(txt_string, bytes)
-                else txt_string
-            )
-            if not record.startswith("v=SOVP1"):
-                continue
-            for part in record.split(";"):
-                part = part.strip()
-                if part.startswith("k="):
-                    return part[2:].strip()
+        # RFC 1035 allows a single TXT RDATA to hold multiple
+        # <character-string> chunks; per draft Section "DNS TXT Record
+        # Format and Resolution", they MUST be concatenated before parsing.
+        record = "".join(
+            chunk.decode("utf-8") if isinstance(chunk, bytes) else chunk
+            for chunk in rdata.strings
+        )
+        if not record.startswith("v=SOVP1"):
+            continue
+        for part in record.split(";"):
+            part = part.strip()
+            if part.startswith("k="):
+                return part[2:].strip()
 
     raise SOVPResolverError(
         f"No valid SOVP1 TXT record found at {txt_name}. "
