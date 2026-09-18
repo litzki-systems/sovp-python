@@ -221,10 +221,6 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
   "contentAddress": {
     "alg": "sha256",
     "digest": "<hex-encoded SHA-256 over JCS-canonical bytes of the non-proof fields>"
-  },
-  "parameters": {
-    "entropy_threshold": 0.12,
-    "determinism_score": 0.98
   }
 }
 ```
@@ -240,9 +236,6 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 > `integrity_proof.created` only for documents that predate this change.
 
 > **`contentAddress` (optional, draft Section 4):** `contentAddress.digest` is a SHA-256 hash computed over the JCS-canonical representation of all non-proof, non-`contentAddress` fields. A verifier independently recomputes it as `sha256(JCS(doc_without_proof_and_contentAddress))` and compares the hex string. This lets downstream consumers (e.g. an `ai-catalog.json` entry) bind a catalog record to the exact document bytes without re-running the Ed25519 signature check. **`contentAddress` is excluded from the Ed25519 signed scope** — it is computed after signing, from the same byte range the signature covers.
-
-> **Note:** `parameters` is non-normative and MUST NOT be used for trust
-> decisions (draft Section 4). It is excluded from the signed scope.
 
 Serve this file at `https://yourdomain.com/.well-known/sovp-identity.json`.
 

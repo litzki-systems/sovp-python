@@ -1,9 +1,21 @@
 # Changelog
 
 All notable changes to the sovp Python package are documented here.
-Protocol specification: [draft-litzki-sovp-03](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
+Protocol specification: [draft-litzki-sovp-04](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 
 ## [Unreleased]
+
+## [1.1.0] — 2026-09-17
+
+### Added
+- `sovp/core.py` — `generate_identity_document()` now signs a `freshness` object (`created`, `nonce`, `expiresAt`) as part of the Ed25519-signed scope; default `context_version` changed from `"v1.4"` to `"v2.0"`. Previously these fields lived inside the unsigned `integrity_proof` and were forgeable without invalidating the signature — same weakness as the already-documented `expiresAt` forgeability in `sovp-engine`'s scanner. Closes the replay-protection gap described in `draft-litzki-sovp-04`.
+- `tests/test_vectors.py` — Test Vector Set 2 (schema v2.0, real generated+verified signatures) covering the new `freshness` object, including tamper rejection for `freshness.created`/`freshness.expiresAt`. Test Vector Set 1 (v1.4, locked) is unchanged.
+
+### Changed
+- `sovp/core.py` — `verify_identity()`'s `check_timestamp` path now reads `freshness.created` first and falls back to the unsigned `integrity_proof.created` only for documents whose `@context` predates v2.0; this fallback affects timestamp freshness checking only, never signature verification.
+- `README.md` — schema example and "Replay protection" table row updated to the v2.0/`freshness` shape; added an explicit callout that the tamper-resistance guarantee is new as of v2.0 and did not hold under v1.4.
+- `README.md` — `contentAddress` example corrected from the stale prefixed `"sha256:<hex>"` single-field form to the shape `generate_identity_document()` actually ships: `{"alg": "sha256", "digest": "<hex>"}`.
+- `README.md` — removed the `parameters` (`entropy_threshold`/`determinism_score`) field from the schema example; it does not exist in any reference implementation (`sovp-python`, `sovp-engine`, or the Cloudflare Worker) and was never anything other than an illustrative artifact. Found while reconciling `draft-litzki-sovp-04` against the running implementations — the draft's own schema example had the same field, removed there too.
 
 ### Fixed
 - `sovp/core.py` — `verify_identity()` no longer fails open when `integrity_proof.created` is missing; with `check_timestamp=True` a missing `created` is now a rejection (Psi_core = 0), closing a replay bypass of draft Section 7.2
