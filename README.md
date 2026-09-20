@@ -25,7 +25,7 @@ Psi_core = Verify(K_pub, sigma, JCS(M))
 `Psi_core = 1` — source verified, proceed with ingestion.  
 `Psi_core = 0` — verification failed, ingestion blocked.
 
-> **Scope of this reference implementation:** This library provides Ed25519 signing and verification primitives for SOVP identity documents. Full protocol execution — including DNS TXT record resolution, HTTP retrieval of `/.well-known/sovp-identity.json`, and Mode B gateway behavior — is implementation-defined and not included in this package.
+> **Scope of this reference implementation:** This library provides Ed25519 signing and verification primitives for SOVP identity documents, plus DNS TXT record resolution and HTTP retrieval of `sovp-identity.json` via `sovp.resolver` (`resolve_dns_pubkey()`, `fetch_identity_document()`, `validate_domain()`). Mode B gateway behavior — an active, caching relay rather than a one-shot check — is implementation-defined and not included in this package.
 
 ---
 
@@ -126,18 +126,43 @@ print(private_key_b64)  # keep this secret
 #### Sign an identity payload
 
 ```python
-from sovp.core import sign_identity
+from sovp.core import generate_identity_document
 import json
+
+# Schema v2.0 (current default): created/nonce/expiresAt live in a signed
+# "freshness" object, not in the unsigned integrity_proof. Use this helper
+# rather than assembling the document by hand — see "Low-level signing
+# primitive" below for what it does internally.
+signed_payload = generate_identity_document(
+    private_key_b64,
+    entity_uid="urn:sovp:your-entity-id",
+    canonical_url="https://yourdomain.com",
+)
+
+with open("sovp-identity.json", "w") as f:
+    json.dump(signed_payload, f, indent=2)
+```
+
+#### Low-level signing primitive
+
+`generate_identity_document()` above is built on `sign_identity()`, the raw Ed25519-over-JCS primitive with no schema opinion of its own — shown here for anyone assembling a document shape by hand:
+
+```python
+from sovp.core import sign_identity
 
 # Non-proof fields only — integrity_proof is always excluded from the signed scope
 # (draft Section 4 MUST). sign_identity() will strip it automatically if present.
 metadata = {
-    "@context": "https://litzki-systems.com/protocol/v1.4",
+    "@context": "https://litzki-systems.com/protocol/v2.0",
     "@type": "SovereignIdentity",
     "entity": {
         "uid": "urn:sovp:your-entity-id",
         "canonical_url": "https://yourdomain.com",
         "verification_method": "Ed25519"
+    },
+    "freshness": {
+        "created": "2026-01-01T00:00:00Z",
+        "expiresAt": "2026-04-01T00:00:00Z"
     }
 }
 
@@ -147,13 +172,9 @@ signed_payload = {
     **metadata,
     "integrity_proof": {
         "signature": signature,
-        "created": "2026-01-01T00:00:00Z",
         "public_key_ref": "dns:txt:_sovp.yourdomain.tld"
     }
 }
-
-with open("sovp-identity.json", "w") as f:
-    json.dump(signed_payload, f, indent=2)
 ```
 
 > `sign_identity()` always strips `integrity_proof` before canonicalizing, so
@@ -249,7 +270,7 @@ _sovp.yourdomain.tld  IN  TXT  "v=SOVP1; k=<your-Ed25519-public-key-base64>"
 
 Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the `_sovp` zone.
 
-> Automatic DNS resolution is not yet implemented. Keys must be supplied directly to `verify_identity()`. See Roadmap.
+> Automatic DNS resolution is implemented in `sovp.resolver.resolve_dns_pubkey()` (see "Live validation example" below and the Roadmap). `verify_identity()` itself remains a pure function and still expects the key to be supplied directly; `sovp.resolver` is what resolves it from DNS on the caller's behalf.
 
 ---
 
