@@ -8,6 +8,7 @@ import dns.resolver
 import dns.exception
 
 from .core import verify_identity
+from .document_safety import parse_unverified_sovp_document, UnverifiedDocumentLimitError
 
 
 class SOVPResolverError(Exception):
@@ -30,11 +31,15 @@ def fetch_identity_document(domain: str, timeout: int = 10) -> dict:
         try:
             resp = requests.get(url, timeout=timeout, headers=headers)
             if resp.status_code == 200:
+                # draft-litzki-sovp-04 "Resource Limits for Unverified
+                # Documents": Psi_core is not known yet at this point, so
+                # resp.json() (== json.loads(), no size/depth/duplicate-key
+                # limit) is not used here.
                 try:
-                    return resp.json()
-                except ValueError as exc:
+                    return parse_unverified_sovp_document(resp.text)
+                except UnverifiedDocumentLimitError as exc:
                     raise SOVPResolverError(
-                        f"JSON parse failure at {url}: {exc}"
+                        f"resource limit violated at {url}: {exc}"
                     ) from exc
         except requests.RequestException:
             continue

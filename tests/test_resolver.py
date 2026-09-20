@@ -1,7 +1,15 @@
 # Copyright (c) 2026 Litzki Systems LLC
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 import sovp.resolver as resolver
+
+
+class _FakeResponse:
+    def __init__(self, status_code, text):
+        self.status_code = status_code
+        self.text = text
 
 
 class _FakeRdata:
@@ -46,3 +54,44 @@ def test_validate_domain_rejects_malformed_integrity_proof_without_crashing(monk
     result = resolver.validate_domain("evil.example")
 
     assert result["psi_core"] == 0
+
+
+def test_fetch_identity_document_rejects_oversized_response(monkeypatch):
+    """
+    draft-litzki-sovp-04 "Resource Limits for Unverified Documents": a
+    verifier parses sovp-identity.json before Psi_core is known, so an
+    oversized document from an unauthenticated sender must be rejected
+    before it is trusted with any further processing (previously this used
+    resp.json(), which has no size limit).
+    """
+    import json as _json
+
+    oversized_text = _json.dumps({"pad": "x" * 70000})
+    monkeypatch.setattr(
+        resolver.requests, "get", lambda url, timeout, headers: _FakeResponse(200, oversized_text)
+    )
+
+    with pytest.raises(resolver.SOVPResolverError, match="resource limit"):
+        resolver.fetch_identity_document("evil.example")
+
+
+def test_fetch_identity_document_rejects_duplicate_keys(monkeypatch):
+    monkeypatch.setattr(
+        resolver.requests, "get", lambda url, timeout, headers: _FakeResponse(200, '{"a":1,"a":2}')
+    )
+
+    with pytest.raises(resolver.SOVPResolverError, match="resource limit"):
+        resolver.fetch_identity_document("evil.example")
+
+
+def test_fetch_identity_document_still_returns_a_well_formed_document(monkeypatch):
+    import json as _json
+
+    good_text = _json.dumps({"@context": "x", "entity": {"uid": "y"}})
+    monkeypatch.setattr(
+        resolver.requests, "get", lambda url, timeout, headers: _FakeResponse(200, good_text)
+    )
+
+    doc = resolver.fetch_identity_document("good.example")
+
+    assert doc == _json.loads(good_text)
