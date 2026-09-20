@@ -5,6 +5,12 @@ Protocol specification: [draft-litzki-sovp-04](https://datatracker.ietf.org/doc/
 
 ## [Unreleased]
 
+### Added
+- `sovp/document_safety.py` — `parse_unverified_sovp_document()`, a minimal JSON parser enforcing draft-litzki-sovp-04's "Resource Limits for Unverified Documents": rejects a document larger than 64 KiB, nested deeper than 16 levels, or containing a duplicate member name in any object, before the document is trusted with any further processing.
+
+### Fixed
+- `sovp/resolver.py` — `fetch_identity_document()` used `resp.json()` (== `json.loads()`) to parse a remote, not-yet-signature-checked document, with no size, depth, or duplicate-key limit. Now parses via `parse_unverified_sovp_document()`.
+
 ## [1.1.0] — 2026-09-17
 
 ### Added
