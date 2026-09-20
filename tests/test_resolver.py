@@ -49,7 +49,7 @@ def test_validate_domain_rejects_malformed_integrity_proof_without_crashing(monk
     }
 
     monkeypatch.setattr(resolver, "fetch_identity_document", lambda domain, timeout=10: document)
-    monkeypatch.setattr(resolver, "resolve_dns_pubkey", lambda domain: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+    monkeypatch.setattr(resolver, "resolve_dns_pubkeys", lambda domain: ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="])
 
     result = resolver.validate_domain("evil.example")
 
@@ -82,6 +82,61 @@ def test_fetch_identity_document_rejects_duplicate_keys(monkeypatch):
 
     with pytest.raises(resolver.SOVPResolverError, match="resource limit"):
         resolver.fetch_identity_document("evil.example")
+
+
+def test_resolve_dns_pubkeys_returns_all_records_during_rotation(monkeypatch):
+    """
+    draft-litzki-sovp-04 "Multiple _sovp TXT records" (key rotation,
+    Vorschlag B): a zone MAY publish more than one v=SOVP1 record while
+    rotating keys; a verifier MUST treat them as an unordered set.
+    """
+    fake_answers = [_FakeRdata([b"v=SOVP1; k=OLDKEY"]), _FakeRdata([b"v=SOVP1; k=NEWKEY"])]
+    monkeypatch.setattr(resolver.dns.resolver, "resolve", lambda name, rtype: fake_answers)
+
+    keys = resolver.resolve_dns_pubkeys("example.com")
+
+    assert keys == ["OLDKEY", "NEWKEY"]
+
+
+def test_resolve_dns_pubkeys_caps_at_four_records(monkeypatch):
+    fake_answers = [_FakeRdata([f"v=SOVP1; k=K{i}".encode()]) for i in range(6)]
+    monkeypatch.setattr(resolver.dns.resolver, "resolve", lambda name, rtype: fake_answers)
+
+    keys = resolver.resolve_dns_pubkeys("example.com")
+
+    assert keys == ["K0", "K1", "K2", "K3"]
+
+
+def test_resolve_dns_pubkey_returns_first_of_several_records(monkeypatch):
+    fake_answers = [_FakeRdata([b"v=SOVP1; k=OLDKEY"]), _FakeRdata([b"v=SOVP1; k=NEWKEY"])]
+    monkeypatch.setattr(resolver.dns.resolver, "resolve", lambda name, rtype: fake_answers)
+
+    assert resolver.resolve_dns_pubkey("example.com") == "OLDKEY"
+
+
+def test_validate_domain_accepts_document_signed_under_second_rotated_key(monkeypatch):
+    """
+    Key-rotation acceptance test: the document verifies under the second
+    published key, not the first. validate_domain() MUST still accept it
+    (psi_core = 1), not stop after the first candidate fails.
+    """
+    from sovp.core import generate_keypair, sign_identity
+
+    old_priv, old_pub = generate_keypair()
+    new_priv, new_pub = generate_keypair()
+
+    metadata = {"@context": "https://litzki-systems.com/protocol/v2.0", "@type": "SovereignIdentity", "entity": {"uid": "urn:sovp:example"}}
+    signature = sign_identity(new_priv, metadata)
+    document = {**metadata, "integrity_proof": {"signature": signature, "public_key_ref": "dns:txt:_sovp.example.com"}}
+
+    monkeypatch.setattr(resolver, "fetch_identity_document", lambda domain, timeout=10: document)
+    # Old key first, new key second — verification must fall through to the
+    # second candidate rather than stopping at the first (wrong) one.
+    monkeypatch.setattr(resolver, "resolve_dns_pubkeys", lambda domain: [old_pub, new_pub])
+
+    result = resolver.validate_domain("example.com")
+
+    assert result["psi_core"] == 1
 
 
 def test_fetch_identity_document_still_returns_a_well_formed_document(monkeypatch):
