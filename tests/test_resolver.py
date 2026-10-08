@@ -90,28 +90,29 @@ def test_resolve_dns_pubkeys_returns_all_records_during_rotation(monkeypatch):
     Vorschlag B): a zone MAY publish more than one v=SOVP1 record while
     rotating keys; a verifier MUST treat them as an unordered set.
     """
-    fake_answers = [_FakeRdata([b"v=SOVP1; k=OLDKEY"]), _FakeRdata([b"v=SOVP1; k=NEWKEY"])]
+    fake_answers = [_FakeRdata([b"v=SOVP1; k=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="]), _FakeRdata([b"v=SOVP1; k=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="])]
     monkeypatch.setattr(resolver.dns.resolver, "resolve", lambda name, rtype: fake_answers)
 
     keys = resolver.resolve_dns_pubkeys("example.com")
 
-    assert keys == ["OLDKEY", "NEWKEY"]
+    assert keys == ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="]
 
 
 def test_resolve_dns_pubkeys_caps_at_four_records(monkeypatch):
-    fake_answers = [_FakeRdata([f"v=SOVP1; k=K{i}".encode()]) for i in range(6)]
+    keys = [__import__("base64").b64encode(bytes([i]) * 32).decode() for i in range(6)]
+    fake_answers = [_FakeRdata([f"v=SOVP1; k={key}".encode()]) for key in keys]
     monkeypatch.setattr(resolver.dns.resolver, "resolve", lambda name, rtype: fake_answers)
 
     keys = resolver.resolve_dns_pubkeys("example.com")
 
-    assert keys == ["K0", "K1", "K2", "K3"]
+    assert keys == [__import__("base64").b64encode(bytes([i]) * 32).decode() for i in range(4)]
 
 
 def test_resolve_dns_pubkey_returns_first_of_several_records(monkeypatch):
     fake_answers = [_FakeRdata([b"v=SOVP1; k=OLDKEY"]), _FakeRdata([b"v=SOVP1; k=NEWKEY"])]
     monkeypatch.setattr(resolver.dns.resolver, "resolve", lambda name, rtype: fake_answers)
 
-    assert resolver.resolve_dns_pubkey("example.com") == "OLDKEY"
+    assert resolver.resolve_dns_pubkey("example.com") == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 
 def test_validate_domain_accepts_document_signed_under_second_rotated_key(monkeypatch):
