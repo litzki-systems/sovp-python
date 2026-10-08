@@ -70,7 +70,7 @@ cd sovp-python
 pip install -e .
 ```
 
-This installs the `sovp` CLI and the `sovp.core` library. Dependencies (`cryptography`, `canonicaljson`) are declared in `pyproject.toml`.
+This installs the `sovp` CLI and the `sovp.core` library. Dependencies (`cryptography`, `jcs`, `dnspython`, `requests`) are declared in `pyproject.toml`.
 
 ---
 
@@ -316,7 +316,7 @@ Result: VERIFIED — identity and integrity confirmed.
 | RFC conformance test vectors | Implemented — see `tests/test_vectors.py` |
 | Live validation (`validate_live.py`) | Implemented |
 | AgenTrust Marketplace integration | Implemented — see [sovp-agentrust-bridge](https://github.com/litzki-systems/sovp-agentrust-bridge) |
-| Reference identity-endpoint deployment (Cloudflare Worker) | Implemented — see `workers/sovp-identity`, live at litzki-systems.com |
+| Reference identity-endpoint deployment (Cloudflare Worker) | Implemented — see `workers/sovp-identity`; deployment requires a fresh Draft 04 document and matching DNS key |
 | Replay protection — nonce deduplication | Planned |
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
 | IETF Internet-Draft | [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active |
