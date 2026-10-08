@@ -72,79 +72,131 @@ def sign_identity(private_key_b64: str, identity_metadata: dict) -> str:
     return base64.b64encode(signature).decode('utf-8')
 
 
+def _is_v2_document(identity_metadata: dict) -> bool:
+    context = identity_metadata.get("@context")
+    return isinstance(context, str) and "/v2.0" in context
+
+
+def _parse_timestamp(value: object) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError("timestamp must be a string")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("timestamp must include timezone information")
+    return parsed.astimezone(timezone.utc)
+
+
+def _validate_freshness(
+    identity_metadata: dict,
+    check_timestamp: bool,
+    max_age_seconds: int,
+    clock_skew_seconds: int = 60,
+) -> None:
+    freshness = identity_metadata.get("freshness")
+
+    if _is_v2_document(identity_metadata):
+        if not isinstance(freshness, dict):
+            raise ValueError("v2.0 documents require a freshness object")
+
+        created_str = freshness.get("created")
+        expires_at_str = freshness.get("expiresAt")
+        if created_str is None or expires_at_str is None:
+            raise ValueError(
+                "v2.0 documents require freshness.created and freshness.expiresAt"
+            )
+
+        created = _parse_timestamp(created_str)
+        expires_at = _parse_timestamp(expires_at_str)
+
+        if expires_at <= created:
+            raise ValueError("freshness.expiresAt must be later than freshness.created")
+
+        now = datetime.now(timezone.utc)
+        if now < created - timedelta(seconds=clock_skew_seconds):
+            raise ValueError("freshness.created is too far in the future")
+        if now > expires_at + timedelta(seconds=clock_skew_seconds):
+            raise ValueError("freshness.expiresAt has expired")
+
+        if check_timestamp and now > created + timedelta(
+            seconds=max_age_seconds + clock_skew_seconds
+        ):
+            raise ValueError("freshness.created is outside the issuance window")
+        return
+
+    if check_timestamp:
+        created_str = None
+        if isinstance(freshness, dict):
+            created_str = freshness.get("created")
+        if created_str is None:
+            proof = identity_metadata.get("integrity_proof", {})
+            if isinstance(proof, dict):
+                created_str = proof.get("created")
+        if created_str is None:
+            raise ValueError("created timestamp is required when timestamp checking is enabled")
+
+        created = _parse_timestamp(created_str)
+        now = datetime.now(timezone.utc)
+        if now < created - timedelta(seconds=clock_skew_seconds):
+            raise ValueError("created timestamp is too far in the future")
+        if now > created + timedelta(seconds=max_age_seconds + clock_skew_seconds):
+            raise ValueError("created timestamp is outside the issuance window")
+
+
 def verify_identity(
     identity_metadata: dict,
     signature_b64: str,
     public_key_b64: str,
     check_timestamp: bool = False,
     max_age_seconds: int = 600,
+    expected_host: str | None = None,
 ) -> bool:
     """
-    Deterministically verifies the cryptographic alignment (Psi_core resonance).
+    Verify an SOVP identity document signature and Draft 04 bindings.
 
-    Per draft Section 3: Psi_core = Verify(K_pub, sigma, JCS(M)).
-    Ed25519 pure mode (RFC 8032) is used; no external pre-hash is applied.
+    Schema v2.0 requires freshness.created and freshness.expiresAt. The
+    freshness fields are signed; expiresAt is always enforced, while the
+    created issuance window is enforced when check_timestamp is True.
 
-    Per draft Section 4 MUST: integrity_proof is stripped before
-    canonicalization, so callers MAY pass the full document or the non-proof
-    subset; the result is identical.
-
-    Per draft Section 7.2 SHOULD: when check_timestamp is True, rejects any
-    document whose created timestamp is older than max_age_seconds (default
-    600). Schema v2.0+: created/expiresAt/nonce live in the signed
-    "freshness" object; this is the primary read location. Schema < v2.0
-    (legacy): falls back to the unsigned integrity_proof.created field for
-    the transition window (draft Section 4 "Migration from v1.4") — this
-    fallback affects only timestamp freshness checking, never signature
-    verification.
-
-    Args:
-        identity_metadata (dict): The identity payload (full document or
-            non-proof fields only).
-        signature_b64 (str): The base64 encoded signature.
-        public_key_b64 (str): The base64 encoded Ed25519 public key.
-        check_timestamp (bool): When True, enforce the 600-second validity
-            window on the freshness.created field (draft Section 7.2).
-        max_age_seconds (int): Maximum acceptable age of the created timestamp
-            in seconds. Default: 600 (per draft Section 7.2).
-
-    Returns:
-        bool: True if the signature is valid (Psi_core = 1), False otherwise
-        (Psi_core = 0).
+    When expected_host is supplied, entity.canonical_url MUST resolve to the
+    same host, normalized to lower case with a trailing dot removed.
     """
     try:
+        if expected_host is not None:
+            entity = identity_metadata.get("entity")
+            canonical_url = (
+                entity.get("canonical_url") if isinstance(entity, dict) else None
+            )
+            if not isinstance(canonical_url, str):
+                return False
+            parsed = urlparse(canonical_url)
+            if not parsed.hostname:
+                return False
+            actual_host = parsed.hostname.rstrip(".").lower()
+            wanted_host = expected_host.rstrip(".").lower()
+            if actual_host != wanted_host:
+                return False
+
         pub_bytes = base64.b64decode(public_key_b64)
         public_key = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
         sig_bytes = base64.b64decode(signature_b64)
 
-        # Per draft Section 4 MUST: canonicalize only the non-proof fields.
-        payload = {k: v for k, v in identity_metadata.items() if k not in _OUT_OF_SCOPE_KEYS}
+        payload = {
+            k: v for k, v in identity_metadata.items()
+            if k not in _OUT_OF_SCOPE_KEYS
+        }
         canonical_data = jcs.canonicalize(payload)
         public_key.verify(sig_bytes, canonical_data)
 
-        # Per draft Section 7.2 SHOULD: reject stale timestamps.
-        if check_timestamp:
-            # Schema v2.0+: freshness.created is in the signed scope.
-            # Schema < v2.0 (legacy): fall back to integrity_proof.created,
-            # which is unsigned but is the only location that field exists
-            # in — this fallback only affects timestamp freshness checking,
-            # not signature verification, which already ran above.
-            freshness = identity_metadata.get("freshness", {})
-            created_str = freshness.get("created") if isinstance(freshness, dict) else None
-            if created_str is None:
-                proof = identity_metadata.get("integrity_proof", {})
-                created_str = proof.get("created") if isinstance(proof, dict) else None
-            if created_str is None:
-                return False
-            created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-            age = datetime.now(timezone.utc) - created
-            if age > timedelta(seconds=max_age_seconds):
-                return False
-
+        _validate_freshness(
+            identity_metadata,
+            check_timestamp=check_timestamp,
+            max_age_seconds=max_age_seconds,
+        )
         return True
 
     except (InvalidSignature, ValueError, TypeError, AttributeError):
         return False
+
 
 
 def generate_identity_document(
@@ -187,13 +239,17 @@ def generate_identity_document(
     public_key_ref = f"dns:txt:_sovp.{domain}"
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     resolved_nonce = nonce if nonce is not None else str(uuid.uuid4())
+    resolved_expires_at = expires_at
+    if resolved_expires_at is None:
+        resolved_expires_at = (
+            datetime.now(timezone.utc) + timedelta(hours=1)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     freshness = {
         "created": created,
         "nonce": resolved_nonce,
+        "expiresAt": resolved_expires_at,
     }
-    if expires_at is not None:
-        freshness["expiresAt"] = expires_at
 
     # Non-proof payload — the only fields covered by the signature.
     non_proof = {
