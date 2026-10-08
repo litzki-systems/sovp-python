@@ -135,9 +135,20 @@ def test_v2_issuance_window_rejects_beyond_clock_skew():
 
 def test_unknown_top_level_members_are_in_signed_scope():
     priv, pub = generate_keypair()
-    document, _ = _v2_document()
+    document = generate_identity_document(
+        private_key_b64=priv,
+        entity_uid="urn:sovp:signed-extension-test",
+        canonical_url="https://example.com",
+        nonce="signed-extension-test",
+        expires_at="2026-12-31T23:59:59Z",
+    )
     document["vendor_extension"] = {"mode": "example"}
-    document, signature = _sign_document(priv, document)
+    signature = sign_identity(
+        priv,
+        {key: value for key, value in document.items()
+         if key not in ("integrity_proof", "contentAddress", "scan")},
+    )
+    document["integrity_proof"]["signature"] = signature
 
     assert verify_identity(document, signature, pub) is True
 
