@@ -168,13 +168,27 @@ VECTOR_2_DOCUMENT = {
 
 
 def test_vector_2_1_valid():
-    """The fixed v2.0 vector verifies cryptographically without freshness checks."""
-    result = verify_identity(
-        VECTOR_2_DOCUMENT,
-        VECTOR_2_SIGNATURE,
-        VECTOR_2_PUBLIC_KEY,
-    )
-    assert result is False  # expired as of the current test date; see live freshness tests.
+    """The fixed v2.0 vector verifies its signed content after freshness validation."""
+    from sovp import core
+
+    original = core.datetime
+    try:
+        class _FrozenDatetime(original):
+            @classmethod
+            def now(cls, tz=None):
+                return original(2026, 6, 1, 12, 0, 10, tzinfo=timezone.utc)
+
+        core.datetime = _FrozenDatetime
+        result = verify_identity(
+            VECTOR_2_DOCUMENT,
+            VECTOR_2_SIGNATURE,
+            VECTOR_2_PUBLIC_KEY,
+        )
+    finally:
+        core.datetime = original
+
+    assert result is True
+
 
 
 def test_vector_2_2_tampered_freshness_created():
@@ -281,13 +295,3 @@ def test_vector_2_7_timestamp_expired():
     )
     assert result is False
 
-
-def test_vector_2_signature_is_stable_when_verified_without_current_time_checks():
-    """The fixed vector remains useful as a cryptographic regression fixture."""
-    result = verify_identity(
-        VECTOR_2_DOCUMENT,
-        VECTOR_2_SIGNATURE,
-        VECTOR_2_PUBLIC_KEY,
-        check_timestamp=False,
-    )
-    assert result is False
