@@ -1,9 +1,9 @@
 """
 SOVP Live Validation Example
-Demonstrates full pipeline: DNS TXT resolution + HTTP fetch + Ed25519 verify
-against a production SOVP-certified domain.
+Demonstrates the Draft 04 pipeline: DNS TXT resolution, HTTP retrieval,
+host binding, freshness validation, and Ed25519 verification.
 
-Protocol specification: draft-litzki-sovp-03
+Protocol specification: draft-litzki-sovp-04
 https://datatracker.ietf.org/doc/draft-litzki-sovp/
 """
 
