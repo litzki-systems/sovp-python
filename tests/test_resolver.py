@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Litzki Systems LLC
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
+
 import pytest
 
 import sovp.resolver as resolver
@@ -99,7 +101,7 @@ def test_resolve_dns_pubkeys_returns_all_records_during_rotation(monkeypatch):
 
 
 def test_resolve_dns_pubkeys_caps_at_four_records(monkeypatch):
-    keys = [__import__("base64").b64encode(bytes([i]) * 32).decode() for i in range(6)]
+    keys = [base64.b64encode(bytes([i]) * 32).decode() for i in range(6)]
     fake_answers = [_FakeRdata([f"v=SOVP1; k={key}".encode()]) for key in keys]
     monkeypatch.setattr(resolver.dns.resolver, "resolve", lambda name, rtype: fake_answers)
 
