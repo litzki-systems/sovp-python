@@ -82,6 +82,7 @@ def test_v2_freshness_future_clock_skew_exceeded():
 def test_v2_freshness_expiry_clock_skew_boundary():
     priv, pub = generate_keypair()
     document, _ = _v2_document()
+    document["freshness"]["created"] = "2026-10-08T00:58:50Z"
     document["freshness"]["expiresAt"] = "2026-10-08T00:59:01Z"
     document, signature = _sign_document(priv, document)
 
@@ -108,7 +109,7 @@ def test_v2_freshness_expiry_clock_skew_exceeded():
 def test_v2_issuance_window_clock_skew_boundary():
     priv, pub = generate_keypair()
     document, _ = _v2_document()
-    document["freshness"]["created"] = "2026-10-07T23:49:00Z"
+    document["freshness"]["created"] = "2026-10-08T00:49:00Z"
     document["freshness"]["expiresAt"] = "2026-10-08T02:00:00Z"
     document, signature = _sign_document(priv, document)
 
@@ -122,7 +123,7 @@ def test_v2_issuance_window_clock_skew_boundary():
 def test_v2_issuance_window_rejects_beyond_clock_skew():
     priv, pub = generate_keypair()
     document, _ = _v2_document()
-    document["freshness"]["created"] = "2026-10-07T23:48:59Z"
+    document["freshness"]["created"] = "2026-10-08T00:48:59Z"
     document["freshness"]["expiresAt"] = "2026-10-08T02:00:00Z"
     document, signature = _sign_document(priv, document)
 
