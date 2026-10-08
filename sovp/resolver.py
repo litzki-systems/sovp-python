@@ -3,12 +3,18 @@
 
 from __future__ import annotations
 
-import requests
-import dns.resolver
+import base64
+import binascii
+
 import dns.exception
+import dns.resolver
+import requests
 
 from .core import verify_identity
-from .document_safety import parse_unverified_sovp_document, UnverifiedDocumentLimitError
+from .document_safety import (
+    UnverifiedDocumentLimitError,
+    parse_unverified_sovp_document,
+)
 
 
 class SOVPResolverError(Exception):
@@ -24,7 +30,7 @@ def fetch_identity_document(domain: str, timeout: int = 10) -> dict:
     """
     primary_url = f"https://{domain}/.well-known/sovp-identity.json"
     fallback_url = f"https://{domain}/sovp-identity.json"
-    headers = {"User-Agent": "sovp-resolver/1.0.1"}
+    headers = {"User-Agent": "sovp-resolver/1.1.0"}
 
     try:
         resp = requests.get(primary_url, timeout=timeout, headers=headers)
@@ -40,7 +46,9 @@ def fetch_identity_document(domain: str, timeout: int = 10) -> dict:
             raise SOVPResolverError(f"failed to retrieve {fallback_url}: {exc}") from exc
 
     if resp.status_code != 200:
-        raise SOVPResolverError(f"identity document returned HTTP {resp.status_code} at {url}")
+        raise SOVPResolverError(
+            f"identity document returned HTTP {resp.status_code} at {url}"
+        )
 
     try:
         return parse_unverified_sovp_document(resp.text)
@@ -50,15 +58,42 @@ def fetch_identity_document(domain: str, timeout: int = 10) -> dict:
         ) from exc
 
 
+def _parse_sovp_txt_record(record: str) -> str | None:
+    """
+    Parse the exact Draft 04 DNS TXT syntax.
+
+    A matching record consists of exactly:
+        v=SOVP1; k=<standard-base64-Ed25519-public-key>
+    """
+    parts = [part.strip() for part in record.split(";")]
+    if len(parts) != 2 or parts[0] != "v=SOVP1" or not parts[1].startswith("k="):
+        return None
+
+    key_b64 = parts[1][2:]
+    if not key_b64:
+        return None
+
+    try:
+        key_bytes = base64.b64decode(key_b64, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+
+    if len(key_bytes) != 32:
+        return None
+
+    return key_b64
+
 
 def resolve_dns_pubkeys(domain: str, max_keys: int = 4) -> list[str]:
     """
-    Resolve _sovp.{domain} TXT records, returning every matching
-    v=SOVP1; k=<base64> key as an unordered set (draft-litzki-sovp-04
-    "Multiple _sovp TXT records", key-rotation support), capped at
-    max_keys. Raises SOVPResolverError if no record matches or DNS
-    resolution fails.
+    Resolve _sovp.{domain} TXT records.
+
+    All matching v=SOVP1 records form an unordered key set for rotation.
+    At most max_keys candidates are returned.
     """
+    if max_keys < 1:
+        raise ValueError("max_keys must be at least 1")
+
     txt_name = f"_sovp.{domain}"
 
     try:
@@ -78,20 +113,14 @@ def resolve_dns_pubkeys(domain: str, max_keys: int = 4) -> list[str]:
 
     keys: list[str] = []
     for rdata in answers:
-        # RFC 1035 allows a single TXT RDATA to hold multiple
-        # <character-string> chunks; per draft Section "DNS TXT Record
-        # Format and Resolution", they MUST be concatenated before parsing.
         record = "".join(
             chunk.decode("utf-8") if isinstance(chunk, bytes) else chunk
             for chunk in rdata.strings
         )
-        if not record.startswith("v=SOVP1"):
+        key = _parse_sovp_txt_record(record)
+        if key is None:
             continue
-        for part in record.split(";"):
-            part = part.strip()
-            if part.startswith("k="):
-                keys.append(part[2:].strip())
-                break
+        keys.append(key)
         if len(keys) >= max_keys:
             break
 
@@ -105,28 +134,21 @@ def resolve_dns_pubkeys(domain: str, max_keys: int = 4) -> list[str]:
 
 def resolve_dns_pubkey(domain: str) -> str:
     """
-    Resolve _sovp.{domain} TXT record and return a single public key.
-    Kept for callers that only want one display/reference key, not a
-    verification decision; see resolve_dns_pubkeys() for the full,
-    rotation-aware set. Returns the first matching key.
+    Resolve _sovp.{domain} TXT record and return one public key.
+
+    This helper is retained for callers that need one display/reference key.
+    Validation uses resolve_dns_pubkeys() so key rotation remains supported.
     """
     return resolve_dns_pubkeys(domain, max_keys=1)[0]
 
 
 def validate_domain(domain: str, timeout: int = 10) -> dict:
     """
-    Full pipeline:
-    1. fetch_identity_document(domain)
-    2. resolve_dns_pubkeys(domain). every published v=SOVP1 key
-    3. verify_identity(document, signature, pubkey) against each, in order,
-       accepting on the first that verifies (draft-litzki-sovp-04 "Multiple
-       _sovp TXT records", key-rotation support)
-    Returns {
-        "domain": domain,
-        "psi_core": 1 or 0,
-        "document": dict,
-        "public_key_ref": "dns:txt:_sovp.{domain}"
-    }
+    Execute the reference validation pipeline.
+
+    The document is retrieved first, the DNS key set is resolved, and each
+    published candidate key is tested until one verifies the signed document.
+    Host binding and v2.0 freshness are enforced by verify_identity().
     """
     document = fetch_identity_document(domain, timeout=timeout)
     candidate_keys = resolve_dns_pubkeys(domain)

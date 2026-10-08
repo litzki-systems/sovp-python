@@ -5,6 +5,16 @@ Protocol specification: [draft-litzki-sovp-04](https://datatracker.ietf.org/doc/
 
 ## [Unreleased]
 
+### Changed
+- `sovp/core.py` — Draft 04 host binding is enforced through `expected_host`; v2.0 freshness remains signed and expiry is always validated. Generated DNS key references use the URL hostname, excluding ports and normalizing trailing dots and case.
+- `sovp/resolver.py` — DNS TXT parsing now accepts only the exact `v=SOVP1; k=<base64>` record shape and requires a valid 32-byte Ed25519 public key. Legacy endpoint fallback remains restricted to HTTP 404.
+- `examples/` — live validation, end-to-end verification, and the ARD trustManifest example now identify Draft 04 explicitly and demonstrate v2.0 host binding and the current `contentAddress` shape.
+- `workers/sovp-identity/` — the reference worker now serves a publisher-supplied, pre-signed Draft 04 v2.0 document from a Cloudflare secret instead of embedding a stale v1.4 artifact.
+
+### Tests
+- Added Draft 04 conformance coverage for freshness clock-skew boundaries, the 600-second issuance window, signed unknown top-level members, unsigned `contentAddress` and `scan` extensions, host normalization, URL ports, and exact DNS TXT syntax.
+
+
 ### Added
 - `sovp/document_safety.py` — `parse_unverified_sovp_document()`, a minimal JSON parser enforcing draft-litzki-sovp-04's "Resource Limits for Unverified Documents": rejects a document larger than 64 KiB, nested deeper than 16 levels, or containing a duplicate member name in any object, before the document is trusted with any further processing.
 
