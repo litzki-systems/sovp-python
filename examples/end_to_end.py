@@ -40,7 +40,7 @@ print()
 # ── Step 3: Verify — Psi_core resonance check ─────────────────────────────────
 signature = document["integrity_proof"]["signature"]
 
-psi_core = verify_identity(document, signature, public_key_b64)
+psi_core = verify_identity(document, signature, public_key_b64, expected_host="example.com")
 print(f"Psi_core = {'1 ✓  Verified — ingestion may proceed.' if psi_core else '0 ✗  Blocked.'}")
 assert psi_core, "Verification should pass for an unmodified document."
 
@@ -48,7 +48,7 @@ assert psi_core, "Verification should pass for an unmodified document."
 tampered = json.loads(json.dumps(document))
 tampered["entity"]["canonical_url"] = "https://attacker.com"
 
-psi_tampered = verify_identity(tampered, signature, public_key_b64)
+psi_tampered = verify_identity(tampered, signature, public_key_b64, expected_host="example.com")
 print(f"Psi_core = {'1' if psi_tampered else '0 ✗  Tamper detected — ingestion blocked.'}")
 assert not psi_tampered, "Verification should fail after tampering."
 
