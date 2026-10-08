@@ -216,7 +216,7 @@ def generate_identity_document(
     IS part of the signed scope (schema < v2.0 kept them in integrity_proof,
     which is excluded from the signed scope and therefore forgeable without
     invalidating the signature). The scan object (if provided) is appended
-    after integrity_proof and is excluded from the signed scope — consistent
+    after integrity_proof and is excluded from the signed scope. consistent
     with draft V02 item 10: vendor extension objects MUST NOT be included in
     the signed scope.
 
@@ -251,7 +251,7 @@ def generate_identity_document(
         "expiresAt": resolved_expires_at,
     }
 
-    # Non-proof payload — the only fields covered by the signature.
+    # Non-proof payload. the only fields covered by the signature.
     non_proof = {
         "@context": f"https://litzki-systems.com/protocol/{context_version}",
         "@type": "SovereignIdentity",
