@@ -1,6 +1,6 @@
 # sovp-python
 
-**sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp) — a pre-ingestion verification protocol that lets LLMs and autonomous agents cryptographically confirm the identity and integrity of a data source before parsing it. It exists because existing mechanisms (DANE, DIDs, TLS) operate at the wrong layer for agentic pipelines: SOVP sits at Layer 0, before the body is read. To get started: clone the repo and run `pip install -e .` — this exposes both a `sovp.core` Python API and a `sovp` CLI with three commands.
+**sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp), a pre-ingestion verification protocol for validating a signed identity document before its contents are ingested. SOVP verifies that the document was signed by the party controlling an Ed25519 public key published for the document host in DNS. It operates at Layer 0, before the document body is ingested. To get started: clone the repo and run `pip install -e .`. This exposes the `sovp.core` Python API and the `sovp` CLI.
 
 > **Protocol specification:** [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 
@@ -29,18 +29,19 @@ Psi_core = Verify(K_pub, sigma, JCS(M))
 
 ---
 
-## Position in the agentic trust stack
+## Protocol scope
 
-SOVP is the infrastructure attestation layer inside a broader agentic trust stack. The four layers, from discovery to runtime:
+SOVP defines a narrow cryptographic validation boundary at Layer 0. The core verification function is:
 
-| Layer | Concern | Mechanism |
-|---|---|---|
-| **Discovery** | Is the source findable and routable? | DNS, service registries, `ai-catalog.json` |
-| **Install safety** | Is the artifact what it claims to be before execution? | `contentAddress` digest (SHA-256 over JCS bytes), SOVP `trustManifest` type |
-| **Infrastructure trust** | Does the serving entity control the domain and key? | SOVP `sovp-identity.json`, `_sovp` DNS TXT, Ed25519 proof |
-| **Runtime governance** | Is the agent permitted to act on this data in this context? | Policy engines, capability tokens, audit logs |
+`Psi_core = Verify(K_pub, sigma, JCS(M))`
 
-SOVP operates at **layers 2 and 3**. If you arrived here from [ards-project/ard-spec issue #41](https://github.com/ards-project/ard-spec/issues/41): the `trustManifest` type in an `ai-catalog.json` entry maps to layer 2 — it binds a catalog entry's `contentAddress` digest to an independently verifiable infrastructure attestation, so a consuming agent can confirm the entry was produced by the declared entity before acting on it.
+where the public key is resolved from the host's `_sovp` DNS TXT records. For schema v2.0, the signed document also carries freshness data, including `created` and `expiresAt`. The reference resolver validates the document against the expected host and applies the v2.0 freshness rules.
+
+SOVP establishes that the signed document is attributable to the party controlling the DNS-published Ed25519 key. Optional instance binding can associate a signed document with an expected instance identifier. Instance binding does not establish that a process is running as that instance.
+
+SOVP does not establish legal identity, semantic accuracy or truthfulness, security posture, configuration or hardening state, runtime behavior, requester authorization, or permission to perform an action. Those properties require separate evidence and policy mechanisms. SOVP claims should therefore be composed with other systems only through explicit, separately defined evidence and claim semantics.
+
+`contentAddress` provides an unsigned SHA-256 content identity over the same JCS representation used for the signature. It supports content consistency and downstream binding. It does not provide authenticity and must not be used as a substitute for signature verification.
 
 ---
 
@@ -92,7 +93,12 @@ document = generate_identity_document(
 
 # 3. Verify (Psi_core)
 signature = document["integrity_proof"]["signature"]
-psi_core = verify_identity(document, signature, public_key_b64)
+psi_core = verify_identity(
+    document,
+    signature,
+    public_key_b64,
+    expected_host="example.com",
+)
 print("Psi_core =", 1 if psi_core else 0)   # → 1
 
 # 4. Tamper detection
@@ -187,8 +193,8 @@ signed_payload = {
 from sovp.core import verify_identity
 
 # Pass the full document or the non-proof subset — both work identically.
-# Enable check_timestamp=True to enforce the 600-second validity window
-# (draft Section 7.2 SHOULD).
+# Enable check_timestamp=True to enforce the 600-second issuance window
+# defined by Draft 04 Section 7.2.
 psi_core = verify_identity(signed_payload, signature, public_key_b64, check_timestamp=True)
 
 if psi_core:
@@ -215,7 +221,7 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 | Canonicalization | JSON Canonicalization Scheme / JCS (RFC 8785) |
 | Hashing | Ed25519 pure mode (RFC 8032) — `sign(JCS(M))`, no external pre-hash applied |
 | Key distribution | DNS TXT at `_sovp.yourdomain.tld` |
-| Replay protection | `freshness.created` timestamp validation (600 s window, `check_timestamp=True`), cryptographically bound to the signature since schema v2.0; nonce deduplication not yet implemented — see Roadmap |
+| Freshness | Signed `freshness.created` and `freshness.expiresAt` validation; the reference resolver applies the 600 s issuance window when timestamp checking is enabled |
 
 ---
 
