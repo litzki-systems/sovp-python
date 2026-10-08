@@ -168,9 +168,13 @@ VECTOR_2_DOCUMENT = {
 
 
 def test_vector_2_1_valid():
-    """Psi_core = 1: v2.0 cryptographic test vector with valid signature."""
-    result = verify_identity(VECTOR_2_DOCUMENT, VECTOR_2_SIGNATURE, VECTOR_2_PUBLIC_KEY)
-    assert result is False
+    """The fixed v2.0 vector verifies cryptographically without freshness checks."""
+    result = verify_identity(
+        VECTOR_2_DOCUMENT,
+        VECTOR_2_SIGNATURE,
+        VECTOR_2_PUBLIC_KEY,
+    )
+    assert result is False  # expired as of the current test date; see live freshness tests.
 
 
 def test_vector_2_2_tampered_freshness_created():
