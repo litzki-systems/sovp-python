@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---|---|
-| 1.0.x | Yes |
+| 1.1.x | Yes |
 
 ## Reporting a Vulnerability
 
@@ -23,7 +23,7 @@ the reporter.
 
 This policy covers:
 - The `sovp` Python package (`sovp.core`, `sovp.resolver`, `sovp.cli`)
-- The SOVP protocol specification (`draft-litzki-sovp-03`)
+- The SOVP protocol specification (`draft-litzki-sovp-04`)
 
 This policy does not cover third-party dependencies. Please report
 vulnerabilities in `cryptography`, `dnspython`, or `requests` to their
