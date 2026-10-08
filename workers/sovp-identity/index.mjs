@@ -1,50 +1,94 @@
-const CERT = {
-  "@context": "https://litzki-systems.com/protocol/v1.4",
-  "@type": "SovereignIdentity",
-  "entity": {
-    "uid": "urn:sovp:litzki-systems.com",
-    "canonical_url": "https://litzki-systems.com",
-    "verification_method": "Ed25519"
-  },
-  "integrity_proof": {
-    "signature": "ZHce8cCUSVdxCJW/s15ZUdvFgr1vSh0zSP3KK2hc4NcZA97Z0MtaZw0qx7tI6kAbER0NZdpeZy9gVSaYfo64AQ==",
-    "created": "2026-06-09T16:20:11.632Z",
-    "public_key_ref": "dns:txt:_sovp.litzki-systems.com",
-    "nonce": "aef6ead6-a5c3-412b-8d50-00bfe3685420"
-  },
-  "scan": {
-    "verdict": "CERTIFIED",
-    "tScore": 92,
-    "readiness": 93,
-    "parameterCount": 268,
-    "integrityStatus": "VERIFIED",
-    "contentQuality": 86,
-    "aiReadiness": 28,
-    "infrastructureScore": 75,
-    "crawlerAccess": 1,
-    "machineDeclaration": 0.333,
-    "nodesScanned": 500,
-    "spec_url": "https://datatracker.ietf.org/doc/draft-litzki-sovp/",
-    "issuedAt": "2026-06-09T16:20:11.632Z",
-    "expiresAt": "2026-09-07T16:20:11.632Z"
+const REQUIRED_CONTEXT = "https://litzki-systems.com/protocol/v2.0";
+
+function loadIdentityDocument(env) {
+  if (!env.SOVP_IDENTITY_JSON) {
+    throw new Error("SOVP_IDENTITY_JSON secret is not configured");
   }
-};
+
+  let document;
+  try {
+    document = JSON.parse(env.SOVP_IDENTITY_JSON);
+  } catch {
+    throw new Error("SOVP_IDENTITY_JSON is not valid JSON");
+  }
+
+  if (document["@context"] !== REQUIRED_CONTEXT) {
+    throw new Error("identity document must use the Draft 04 v2.0 context");
+  }
+  if (document["@type"] !== "SovereignIdentity") {
+    throw new Error("identity document must have @type SovereignIdentity");
+  }
+
+  const entity = document.entity;
+  if (!entity || typeof entity !== "object" || typeof entity.canonical_url !== "string") {
+    throw new Error("identity document requires entity.canonical_url");
+  }
+
+  const freshness = document.freshness;
+  if (!freshness || typeof freshness !== "object" ||
+      typeof freshness.created !== "string" || typeof freshness.expiresAt !== "string") {
+    throw new Error("v2.0 identity document requires signed freshness");
+  }
+
+  const created = Date.parse(freshness.created);
+  const expiresAt = Date.parse(freshness.expiresAt);
+  if (!Number.isFinite(created) || !Number.isFinite(expiresAt) || expiresAt <= created) {
+    throw new Error("identity document contains invalid freshness timestamps");
+  }
+
+  const proof = document.integrity_proof;
+  if (!proof || typeof proof !== "object" ||
+      typeof proof.signature !== "string" || typeof proof.public_key_ref !== "string") {
+    throw new Error("identity document requires an integrity_proof");
+  }
+
+  return document;
+}
+
+function hostFromUrl(value) {
+  try {
+    return new URL(value).hostname.replace(/\.$/, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
-    if (
-      url.pathname === '/sovp-identity.json' ||
-      url.pathname === '/.well-known/sovp-identity.json'
-    ) {
-      return new Response(JSON.stringify(CERT, null, 2), {
+
+    if (url.pathname !== "/sovp-identity.json" &&
+        url.pathname !== "/.well-known/sovp-identity.json") {
+      return new Response("Not found", { status: 404 });
+    }
+
+    try {
+      const document = loadIdentityDocument(env);
+      const documentHost = hostFromUrl(document.entity.canonical_url);
+      const requestHost = url.hostname.replace(/\.$/, "").toLowerCase();
+
+      if (!documentHost || documentHost !== requestHost) {
+        throw new Error("identity document host does not match serving host");
+      }
+
+      return new Response(JSON.stringify(document, null, 2), {
         headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'public, max-age=3600',
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "public, max-age=300",
+        },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: "SOVP identity endpoint is not configured with a valid Draft 04 document",
+        detail: error instanceof Error ? error.message : String(error),
+      }), {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
         },
       });
     }
-    return new Response('Not found', { status: 404 });
   },
 };
