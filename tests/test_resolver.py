@@ -150,3 +150,134 @@ def test_fetch_identity_document_still_returns_a_well_formed_document(monkeypatc
     doc = resolver.fetch_identity_document("good.example")
 
     assert doc == _json.loads(good_text)
+
+
+def test_fetch_identity_document_uses_fallback_only_on_404(monkeypatch):
+    import json as _json
+
+    calls = []
+
+    def fake_get(url, timeout, headers):
+        calls.append(url)
+        if url.endswith("/.well-known/sovp-identity.json"):
+            return _FakeResponse(404, "")
+        return _FakeResponse(200, _json.dumps({"@context": "x"}))
+
+    monkeypatch.setattr(resolver.requests, "get", fake_get)
+
+    doc = resolver.fetch_identity_document("example.com")
+
+    assert doc == {"@context": "x"}
+    assert len(calls) == 2
+    assert calls[0].endswith("/.well-known/sovp-identity.json")
+    assert calls[1].endswith("/sovp-identity.json")
+
+
+def test_fetch_identity_document_does_not_fallback_on_server_error(monkeypatch):
+    calls = []
+
+    def fake_get(url, timeout, headers):
+        calls.append(url)
+        return _FakeResponse(500, "")
+
+    monkeypatch.setattr(resolver.requests, "get", fake_get)
+
+    with pytest.raises(resolver.SOVPResolverError, match="HTTP 500"):
+        resolver.fetch_identity_document("example.com")
+
+    assert calls == ["https://example.com/.well-known/sovp-identity.json"]
+
+
+def test_validate_domain_enforces_host_binding_and_v2_freshness(monkeypatch):
+    from datetime import datetime, timezone, timedelta
+    from sovp.core import generate_keypair, sign_identity
+
+    priv, pub = generate_keypair()
+    now = datetime.now(timezone.utc)
+    document = {
+        "@context": "https://litzki-systems.com/protocol/v2.0",
+        "@type": "SovereignIdentity",
+        "entity": {
+            "uid": "urn:sovp:example",
+            "canonical_url": "https://example.com",
+            "verification_method": "Ed25519",
+        },
+        "freshness": {
+            "created": (now - timedelta(seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "nonce": "resolver-test",
+            "expiresAt": (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    }
+    signature = sign_identity(priv, document)
+    document["integrity_proof"] = {
+        "signature": signature,
+        "public_key_ref": "dns:txt:_sovp.example.com",
+    }
+
+    monkeypatch.setattr(
+        resolver,
+        "fetch_identity_document",
+        lambda domain, timeout=10: document,
+    )
+    monkeypatch.setattr(
+        resolver,
+        "resolve_dns_pubkeys",
+        lambda domain: [pub],
+    )
+
+    assert resolver.validate_domain("example.com")["psi_core"] == 1
+
+    mismatched = dict(document)
+    mismatched["entity"] = dict(document["entity"])
+    mismatched["entity"]["canonical_url"] = "https://attacker.example"
+    mismatched["integrity_proof"] = dict(document["integrity_proof"])
+    mismatched["integrity_proof"]["signature"] = sign_identity(priv, {
+        k: v for k, v in mismatched.items()
+        if k not in ("integrity_proof", "contentAddress", "scan")
+    })
+
+    monkeypatch.setattr(
+        resolver,
+        "fetch_identity_document",
+        lambda domain, timeout=10: mismatched,
+    )
+
+    assert resolver.validate_domain("example.com")["psi_core"] == 0
+
+
+def test_validate_domain_rejects_expired_v2_document(monkeypatch):
+    from sovp.core import generate_keypair, sign_identity
+
+    priv, pub = generate_keypair()
+    document = {
+        "@context": "https://litzki-systems.com/protocol/v2.0",
+        "@type": "SovereignIdentity",
+        "entity": {
+            "uid": "urn:sovp:example",
+            "canonical_url": "https://example.com",
+            "verification_method": "Ed25519",
+        },
+        "freshness": {
+            "created": "2020-01-01T00:00:00Z",
+            "nonce": "expired",
+            "expiresAt": "2020-01-02T00:00:00Z",
+        },
+    }
+    signature = sign_identity(priv, document)
+    document["integrity_proof"] = {
+        "signature": signature,
+        "public_key_ref": "dns:txt:_sovp.example.com",
+    }
+
+    monkeypatch.setattr(
+        resolver,
+        "fetch_identity_document",
+        lambda domain, timeout=10: document,
+    )
+    monkeypatch.setattr(
+        resolver,
+        "resolve_dns_pubkeys",
+        lambda domain: [pub],
+    )
+
+    assert resolver.validate_domain("example.com")["psi_core"] == 0
