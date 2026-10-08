@@ -235,8 +235,10 @@ def generate_identity_document(
     Returns:
         dict: The complete signed sovp-identity.json document.
     """
-    domain = urlparse(canonical_url).netloc
-    public_key_ref = f"dns:txt:_sovp.{domain}"
+    hostname = urlparse(canonical_url).hostname
+    if not hostname:
+        raise ValueError("canonical_url must contain a valid host")
+    public_key_ref = f"dns:txt:_sovp.{hostname.rstrip('.').lower()}"
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     resolved_nonce = nonce if nonce is not None else str(uuid.uuid4())
     resolved_expires_at = expires_at
