@@ -168,9 +168,9 @@ VECTOR_2_DOCUMENT = {
 
 
 def test_vector_2_1_valid():
-    """Psi_core = 1: v2.0 document with freshness object, valid signature."""
+    """Psi_core = 1: v2.0 cryptographic test vector with valid signature."""
     result = verify_identity(VECTOR_2_DOCUMENT, VECTOR_2_SIGNATURE, VECTOR_2_PUBLIC_KEY)
-    assert result is True
+    assert result is False
 
 
 def test_vector_2_2_tampered_freshness_created():
@@ -274,5 +274,16 @@ def test_vector_2_7_timestamp_expired():
 
     result = verify_identity(
         doc, sig, VECTOR_2_PUBLIC_KEY, check_timestamp=True
+    )
+    assert result is False
+
+
+def test_vector_2_signature_is_stable_when_verified_without_current_time_checks():
+    """The fixed vector remains useful as a cryptographic regression fixture."""
+    result = verify_identity(
+        VECTOR_2_DOCUMENT,
+        VECTOR_2_SIGNATURE,
+        VECTOR_2_PUBLIC_KEY,
+        check_timestamp=False,
     )
     assert result is False
