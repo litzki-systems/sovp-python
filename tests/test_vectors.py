@@ -168,9 +168,27 @@ VECTOR_2_DOCUMENT = {
 
 
 def test_vector_2_1_valid():
-    """Psi_core = 1: v2.0 document with freshness object, valid signature."""
-    result = verify_identity(VECTOR_2_DOCUMENT, VECTOR_2_SIGNATURE, VECTOR_2_PUBLIC_KEY)
+    """The fixed v2.0 vector verifies its signed content after freshness validation."""
+    from sovp import core
+
+    original = core.datetime
+    try:
+        class _FrozenDatetime(original):
+            @classmethod
+            def now(cls, tz=None):
+                return original(2026, 6, 1, 12, 0, 10, tzinfo=timezone.utc)
+
+        core.datetime = _FrozenDatetime
+        result = verify_identity(
+            VECTOR_2_DOCUMENT,
+            VECTOR_2_SIGNATURE,
+            VECTOR_2_PUBLIC_KEY,
+        )
+    finally:
+        core.datetime = original
+
     assert result is True
+
 
 
 def test_vector_2_2_tampered_freshness_created():
@@ -276,3 +294,4 @@ def test_vector_2_7_timestamp_expired():
         doc, sig, VECTOR_2_PUBLIC_KEY, check_timestamp=True
     )
     assert result is False
+

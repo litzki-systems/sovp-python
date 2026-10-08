@@ -17,36 +17,38 @@ class SOVPResolverError(Exception):
 
 def fetch_identity_document(domain: str, timeout: int = 10) -> dict:
     """
-    Fetch /.well-known/sovp-identity.json from domain.
-    Primary: https://{domain}/.well-known/sovp-identity.json
-    Fallback: https://{domain}/sovp-identity.json
-    Raises SOVPResolverError on HTTP error or JSON parse failure.
-    Returns parsed dict.
+    Fetch the SOVP identity document.
+
+    The well-known endpoint is authoritative. The legacy path is used only
+    when the well-known endpoint returns HTTP 404.
     """
     primary_url = f"https://{domain}/.well-known/sovp-identity.json"
     fallback_url = f"https://{domain}/sovp-identity.json"
     headers = {"User-Agent": "sovp-resolver/1.0.1"}
 
-    for url in (primary_url, fallback_url):
-        try:
-            resp = requests.get(url, timeout=timeout, headers=headers)
-            if resp.status_code == 200:
-                # draft-litzki-sovp-04 "Resource Limits for Unverified
-                # Documents": Psi_core is not known yet at this point, so
-                # resp.json() (== json.loads(), no size/depth/duplicate-key
-                # limit) is not used here.
-                try:
-                    return parse_unverified_sovp_document(resp.text)
-                except UnverifiedDocumentLimitError as exc:
-                    raise SOVPResolverError(
-                        f"resource limit violated at {url}: {exc}"
-                    ) from exc
-        except requests.RequestException:
-            continue
+    try:
+        resp = requests.get(primary_url, timeout=timeout, headers=headers)
+    except requests.RequestException as exc:
+        raise SOVPResolverError(f"failed to retrieve {primary_url}: {exc}") from exc
 
-    raise SOVPResolverError(
-        f"sovp-identity.json not reachable at {primary_url} or {fallback_url}"
-    )
+    url = primary_url
+    if resp.status_code == 404:
+        url = fallback_url
+        try:
+            resp = requests.get(fallback_url, timeout=timeout, headers=headers)
+        except requests.RequestException as exc:
+            raise SOVPResolverError(f"failed to retrieve {fallback_url}: {exc}") from exc
+
+    if resp.status_code != 200:
+        raise SOVPResolverError(f"identity document returned HTTP {resp.status_code} at {url}")
+
+    try:
+        return parse_unverified_sovp_document(resp.text)
+    except UnverifiedDocumentLimitError as exc:
+        raise SOVPResolverError(
+            f"resource limit violated at {url}: {exc}"
+        ) from exc
+
 
 
 def resolve_dns_pubkeys(domain: str, max_keys: int = 4) -> list[str]:
@@ -115,7 +117,7 @@ def validate_domain(domain: str, timeout: int = 10) -> dict:
     """
     Full pipeline:
     1. fetch_identity_document(domain)
-    2. resolve_dns_pubkeys(domain) — every published v=SOVP1 key
+    2. resolve_dns_pubkeys(domain). every published v=SOVP1 key
     3. verify_identity(document, signature, pubkey) against each, in order,
        accepting on the first that verifies (draft-litzki-sovp-04 "Multiple
        _sovp TXT records", key-rotation support)
@@ -134,7 +136,13 @@ def validate_domain(domain: str, timeout: int = 10) -> dict:
 
     psi_core = 0
     for public_key_b64 in candidate_keys:
-        if verify_identity(document, signature_b64, public_key_b64):
+        if verify_identity(
+            document,
+            signature_b64,
+            public_key_b64,
+            check_timestamp=True,
+            expected_host=domain,
+        ):
             psi_core = 1
             break
 
