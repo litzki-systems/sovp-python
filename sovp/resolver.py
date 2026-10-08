@@ -117,7 +117,7 @@ def validate_domain(domain: str, timeout: int = 10) -> dict:
     """
     Full pipeline:
     1. fetch_identity_document(domain)
-    2. resolve_dns_pubkeys(domain) — every published v=SOVP1 key
+    2. resolve_dns_pubkeys(domain). every published v=SOVP1 key
     3. verify_identity(document, signature, pubkey) against each, in order,
        accepting on the first that verifies (draft-litzki-sovp-04 "Multiple
        _sovp TXT records", key-rotation support)
