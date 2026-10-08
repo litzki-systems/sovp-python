@@ -305,3 +305,71 @@ def test_generate_identity_document_with_scan():
 
     signature = doc["integrity_proof"]["signature"]
     assert verify_identity(doc, signature, pub) is True
+
+
+def _fresh_v2_document(**overrides):
+    from datetime import datetime, timezone, timedelta
+
+    now = datetime.now(timezone.utc)
+    metadata = {
+        "@context": "https://litzki-systems.com/protocol/v2.0",
+        "@type": "SovereignIdentity",
+        "entity": {
+            "uid": "urn:sovp:test-v2",
+            "canonical_url": "https://example.com",
+            "verification_method": "Ed25519",
+        },
+        "freshness": {
+            "created": (now - timedelta(seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "nonce": "test-nonce",
+            "expiresAt": (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    }
+    metadata.update(overrides)
+    return metadata
+
+
+def test_v2_freshness_requires_expires_at():
+    priv, pub = generate_keypair()
+    metadata = _fresh_v2_document()
+    del metadata["freshness"]["expiresAt"]
+    signature = sign_identity(priv, metadata)
+    assert verify_identity(metadata, signature, pub) is False
+
+
+def test_v2_freshness_rejects_expired_document():
+    priv, pub = generate_keypair()
+    metadata = _fresh_v2_document()
+    metadata["freshness"]["expiresAt"] = "2020-01-01T00:00:00Z"
+    signature = sign_identity(priv, metadata)
+    assert verify_identity(metadata, signature, pub) is False
+
+
+def test_v2_freshness_rejects_invalid_expiry_order():
+    priv, pub = generate_keypair()
+    metadata = _fresh_v2_document()
+    metadata["freshness"]["expiresAt"] = metadata["freshness"]["created"]
+    signature = sign_identity(priv, metadata)
+    assert verify_identity(metadata, signature, pub) is False
+
+
+def test_host_binding_accepts_matching_host():
+    priv, pub = generate_keypair()
+    doc = generate_identity_document(
+        private_key_b64=priv,
+        entity_uid="urn:sovp:test-host-match",
+        canonical_url="https://Example.com",
+    )
+    signature = doc["integrity_proof"]["signature"]
+    assert verify_identity(doc, signature, pub, expected_host="example.com") is True
+
+
+def test_host_binding_rejects_mismatched_host():
+    priv, pub = generate_keypair()
+    doc = generate_identity_document(
+        private_key_b64=priv,
+        entity_uid="urn:sovp:test-host-mismatch",
+        canonical_url="https://example.com",
+    )
+    signature = doc["integrity_proof"]["signature"]
+    assert verify_identity(doc, signature, pub, expected_host="attacker.example") is False
