@@ -125,9 +125,31 @@ def test_validate_domain_accepts_document_signed_under_second_rotated_key(monkey
     old_priv, old_pub = generate_keypair()
     new_priv, new_pub = generate_keypair()
 
-    metadata = {"@context": "https://litzki-systems.com/protocol/v2.0", "@type": "SovereignIdentity", "entity": {"uid": "urn:sovp:example"}}
+    from datetime import datetime, timezone, timedelta
+
+    now = datetime.now(timezone.utc)
+    metadata = {
+        "@context": "https://litzki-systems.com/protocol/v2.0",
+        "@type": "SovereignIdentity",
+        "entity": {
+            "uid": "urn:sovp:example",
+            "canonical_url": "https://example.com",
+            "verification_method": "Ed25519",
+        },
+        "freshness": {
+            "created": (now - timedelta(seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "nonce": "rotation-test",
+            "expiresAt": (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    }
     signature = sign_identity(new_priv, metadata)
-    document = {**metadata, "integrity_proof": {"signature": signature, "public_key_ref": "dns:txt:_sovp.example.com"}}
+    document = {
+        **metadata,
+        "integrity_proof": {
+            "signature": signature,
+            "public_key_ref": "dns:txt:_sovp.example.com",
+        },
+    }
 
     monkeypatch.setattr(resolver, "fetch_identity_document", lambda domain, timeout=10: document)
     # Old key first, new key second — verification must fall through to the
