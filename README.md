@@ -4,6 +4,7 @@
 
 > **Protocol specification:** [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 
+[![PyPI](https://img.shields.io/pypi/v/sovp.svg)](https://pypi.org/project/sovp/)
 [![CI](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml/badge.svg)](https://github.com/litzki-systems/sovp-python/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/)
