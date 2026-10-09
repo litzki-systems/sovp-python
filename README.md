@@ -1,6 +1,6 @@
 # sovp-python
 
-**sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp), a pre-ingestion verification protocol for validating a signed identity document before its contents are ingested. SOVP verifies that the document was signed by the party controlling an Ed25519 public key published for the document host in DNS. It operates at Layer 0, before the document body is ingested. To get started: clone the repo and run `pip install -e .`. This exposes the `sovp.core` Python API and the `sovp` CLI.
+**sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp), a pre-ingestion verification protocol for validating a signed identity document before its contents are ingested. SOVP verifies that the document was signed by the party controlling an Ed25519 public key published for the document host in DNS. It operates at Layer 0, before the document body is ingested. To get started, run `pip install sovp`. This exposes the `sovp.core` Python API and the `sovp` CLI. For development, clone the repo and run `pip install -e .` instead.
 
 > **Protocol specification:** [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 

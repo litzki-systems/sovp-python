@@ -158,7 +158,7 @@ VECTOR_2_DOCUMENT = {
     },
     "contentAddress": {
         "alg": "sha256",
-        "digest": "33465a2bb2d7885afd9dd8890ac9eafd48a98e16bb75cd2be4ebedf2763ae2b5",
+        "digest": "d00c6db5124803dd67495b0551dc0249994fd6f8185097242026e28a4d30b460",
     },
     "integrity_proof": {
         "signature": VECTOR_2_SIGNATURE,
@@ -295,3 +295,40 @@ def test_vector_2_7_timestamp_expired():
     )
     assert result is False
 
+
+def test_vector_2_content_address_digest_recomputes():
+    """contentAddress.digest in the vector equals sha256(JCS(signed scope)).
+
+    The digest shipped in VECTOR_2_DOCUMENT was wrong until 2026-10-09 and no
+    test looked at it, so the vector and the specification drifted apart
+    unnoticed. This test recomputes the value from the vector itself.
+    """
+    import hashlib
+    import jcs
+
+    signed_scope = {
+        k: v for k, v in VECTOR_2_DOCUMENT.items()
+        if k not in ("integrity_proof", "contentAddress", "scan")
+    }
+    recomputed = hashlib.sha256(jcs.canonicalize(signed_scope)).hexdigest()
+
+    assert VECTOR_2_DOCUMENT["contentAddress"]["alg"] == "sha256"
+    assert recomputed == VECTOR_2_DOCUMENT["contentAddress"]["digest"]
+
+
+def test_vector_2_content_address_digest_detects_tampering():
+    """Any change inside the signed scope changes the recomputed digest."""
+    import hashlib
+    import jcs
+
+    tampered = {
+        k: v for k, v in VECTOR_2_DOCUMENT.items()
+        if k not in ("integrity_proof", "contentAddress", "scan")
+    }
+    tampered["entity"] = {
+        **tampered["entity"],
+        "canonical_url": "https://attacker.example",
+    }
+    recomputed = hashlib.sha256(jcs.canonicalize(tampered)).hexdigest()
+
+    assert recomputed != VECTOR_2_DOCUMENT["contentAddress"]["digest"]
