@@ -3,6 +3,65 @@
 All notable changes to the sovp Python package are documented here.
 Protocol specification: [draft-litzki-sovp-04](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 
+## [1.1.1] — 2026-10-09
+
+External review of the published surface (report V11) found that the documented
+live-validation path could not succeed against any real deployment, including
+the reference deployment. This release fixes that and the documentation defects
+found alongside it. No wire format, no schema and no signed scope changed.
+
+### Fixed
+- `sovp/resolver.py` — `validate_domain()` passed `check_timestamp=True`
+  unconditionally, which enforced the issuance window of draft Section 9.4
+  (default `W = 600 s`) against `freshness.created`. A statically published
+  `.well-known` document is re-signed on its validity cycle, not per request,
+  so the window could never be satisfied: `validate_domain("litzki-systems.com")`
+  returned `psi_core = 0` for a correctly signed, unexpired document. The
+  window is now opt-in via a new `check_timestamp` parameter, default `False`.
+  `freshness.expiresAt` is still always enforced, as is host binding.
+- `sovp/core.py` — `generate_identity_document()` defaulted
+  `freshness.expiresAt` to `created + 1 hour`, while its own docstring (and
+  draft Section 10) stated that `expiresAt` was omitted unless the caller
+  supplied it. Both statements were wrong. The default is now
+  `created + DEFAULT_VALIDITY_DAYS` (90 days), matching what the production
+  deployments publish, and the docstring says so.
+- `README.md` — the "Live validation example" told the reader to run
+  `python examples/validate_live.py`, a file the PyPI distribution does not
+  contain, and printed an expected output with `Psi_core: 1` (actually `0`,
+  see above) and `Entity UID: urn:sovp:litzki-systems.com` (actually
+  `urn:sovp:litzki-systems-llc`). The section is now a three-line example over
+  the installed API with its real output, and it says that `examples/` lives in
+  the repository only.
+- `README.md` — two dead draft cross-references: the issuance window was cited
+  as "Section 7.2", which does not exist in revision 04 (Section 7 has no
+  subsections); it is Section 9.4. The 300-second DNS TTL recommendation was
+  cited as Section 6.1; it is Section 9.3. The 1.1.0 changelog entry carried
+  the same wrong number and is corrected in place.
+
+### Added
+- `sovp/core.py` — `verify_identity_detail()`, returning
+  `(verified, reason)`. `verify_identity()` keeps its boolean contract and is
+  now a thin wrapper around it.
+- `sovp/resolver.py` — `validate_domain()` returns a `reason` field naming the
+  first failed check: `ok`, `host_mismatch`, `signature`, `freshness_missing`,
+  `freshness_invalid`, `created_in_future`, `expired`, `issuance_window`,
+  `no_key`. A silent `0` could not distinguish an expired document from a
+  forged one.
+- `sovp/core.py` — `DEFAULT_VALIDITY_DAYS = 90` and the `REASON_*` constants,
+  both exported from the `sovp` package.
+- `tests/` — seven tests: the two-day-old document that must verify by default
+  (the regression this release exists for), the window when explicitly
+  requested, `reason` for expiry vs. signature vs. host mismatch, the 90-day
+  default and an explicit override, and `verify_identity_detail()`'s reason
+  codes. 80 tests pass.
+
+### Changed
+- `pyproject.toml` — `requires-python = ">=3.9"` declared; the README badge
+  claimed 3.9+ but the metadata named no floor.
+- `README.md` — Roadmap: the ARD `trustManifest` registration is "Proposed —
+  open issue", not "In progress"; the live-validation row names
+  `validate_domain()` instead of the unshipped example file.
+
 ## [1.1.0] — 2026-10-09
 
 ### Added
@@ -25,7 +84,7 @@ Protocol specification: [draft-litzki-sovp-04](https://datatracker.ietf.org/doc/
 
 ### Fixed
 - `tests/test_vectors.py` — `contentAddress.digest` in Test Vector Set 2 was wrong. The vector shipped `33465a2b…3ae2b5`; the correct value over `sha256(JCS(signed scope))` is `d00c6db5…30b460`. No test read the field, so the vector and the specification drifted apart unnoticed.
-- `sovp/core.py` — `verify_identity()` no longer fails open when `integrity_proof.created` is missing; with `check_timestamp=True` a missing `created` is now a rejection (Psi_core = 0), closing a replay bypass of draft Section 7.2
+- `sovp/core.py` — `verify_identity()` no longer fails open when `integrity_proof.created` is missing; with `check_timestamp=True` a missing `created` is now a rejection (Psi_core = 0), closing a replay bypass of draft Section 9.4
 - `sovp/core.py` — `verify_identity()` no longer raises `AttributeError` when `integrity_proof` is a non-dict value (attacker-controlled since it's excluded from the signed payload); now returns `False` per the documented `bool`-only contract
 - `sovp/resolver.py` — `fetch_identity_document()` used `resp.json()` (== `json.loads()`) to parse a remote, not-yet-signature-checked document, with no size, depth, or duplicate-key limit. Now parses via `parse_unverified_sovp_document()`.
 

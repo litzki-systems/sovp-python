@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sovp"
-version = "1.1.0"
+version = "1.1.1"
 readme = "README.md"
 description = "Sovereign Validation Protocol (SOVP) Core Engine"
 authors = [{name = "Litzki Systems LLC"}]
 license = "Apache-2.0"
+requires-python = ">=3.9"
 dependencies = [
     "cryptography>=38.0.0,!=40.0.0,!=40.0.1,<42",
     "jcs",

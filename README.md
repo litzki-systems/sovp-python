@@ -194,9 +194,10 @@ signed_payload = {
 from sovp.core import verify_identity
 
 # Pass the full document or the non-proof subset — both work identically.
-# Enable check_timestamp=True to enforce the 600-second issuance window
-# defined by Draft 04 Section 7.2.
-psi_core = verify_identity(signed_payload, signature, public_key_b64, check_timestamp=True)
+# check_timestamp=True enforces the issuance window of Draft 04 Section 9.4
+# (default W = 600 s) against freshness.created. Leave it off for a statically
+# published .well-known document: freshness.expiresAt is checked either way.
+psi_core = verify_identity(signed_payload, signature, public_key_b64)
 
 if psi_core:
     print("Psi_core = 1: Verified.")
@@ -275,7 +276,7 @@ Serve this file at `https://yourdomain.com/.well-known/sovp-identity.json`.
 _sovp.yourdomain.tld  IN  TXT  "v=SOVP1; k=<your-Ed25519-public-key-base64>"
 ```
 
-Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the `_sovp` zone.
+Recommended TTL: 300 seconds (per draft Section 9.3). DNSSEC recommended for the `_sovp` zone.
 
 > Automatic DNS resolution is implemented in `sovp.resolver.resolve_dns_pubkey()` (see "Live validation example" below and the Roadmap). `verify_identity()` itself remains a pure function and still expects the key to be supplied directly; `sovp.resolver` is what resolves it from DNS on the caller's behalf.
 
@@ -283,24 +284,43 @@ Recommended TTL: 300 seconds (per draft Section 6.1). DNSSEC recommended for the
 
 ## Live validation example
 
-To validate a live production domain (requires DNS + network access):
+To validate a live production domain over the installed API (requires DNS +
+network access, nothing to clone):
 
-```bash
-python examples/validate_live.py
+```python
+from sovp.resolver import validate_domain
+
+result = validate_domain("litzki-systems.com")
+print(result["psi_core"], result["reason"], result["document"]["entity"]["uid"])
 ```
 
-This runs the full pipeline against `litzki-systems.com`: DNS TXT resolution, HTTP fetch of `/.well-known/sovp-identity.json`, and Ed25519 verification.
+Output:
+```
+1 ok urn:sovp:litzki-systems-llc
+```
 
-Expected output:
-```
-SOVP Live Validation — litzki-systems.com
-Domain:          litzki-systems.com
-Psi_core:        1
-Public key ref:  dns:txt:_sovp.litzki-systems.com
-Entity UID:      urn:sovp:litzki-systems.com
-Canonical URL:   https://litzki-systems.com
-Result: VERIFIED — identity and integrity confirmed.
-```
+`validate_domain()` runs the full pipeline: DNS TXT resolution of the `_sovp`
+key set, HTTP retrieval of `/.well-known/sovp-identity.json`, host binding,
+the v2.0 freshness rules including `freshness.expiresAt`, and Ed25519
+verification against each published candidate key.
+
+`reason` names the first check that failed and is `"ok"` on success. The
+values are `host_mismatch`, `signature`, `freshness_missing`,
+`freshness_invalid`, `created_in_future`, `expired`, `issuance_window` and
+`no_key` — so a document that is merely past its validity window is
+distinguishable from one whose signature does not hold.
+
+> **Issuance window.** `validate_domain()` does **not** apply the issuance
+> window of draft Section 9.4 by default. A statically published
+> `.well-known` document is re-signed on its validity cycle, not per request,
+> so it cannot satisfy a 600-second window; Section 9.4 permits a longer `W`
+> by local policy. Pass `check_timestamp=True` when you verify a document that
+> was produced in response to a challenge.
+
+A longer annotated walkthrough, including key generation and tamper
+detection, is in [`examples/validate_live.py`](examples/validate_live.py) and
+[`examples/end_to_end.py`](examples/end_to_end.py) in the repository. Those
+files are not part of the PyPI distribution — clone the repo to run them.
 
 ---
 
@@ -315,13 +335,13 @@ Result: VERIFIED — identity and integrity confirmed.
 | `contentAddress` digest (SHA-256 over JCS bytes) | Implemented |
 | DNS + HTTP resolution in `SOVPValidator` | Implemented — see `sovp.resolver` |
 | RFC conformance test vectors | Implemented — see `tests/test_vectors.py` |
-| Live validation (`validate_live.py`) | Implemented |
+| Live validation (`validate_domain()`) | Implemented — see `sovp.resolver` |
 | AgenTrust Marketplace integration | Implemented — see [sovp-agentrust-bridge](https://github.com/litzki-systems/sovp-agentrust-bridge) |
 | Reference identity-endpoint deployment (Cloudflare Worker) | Implemented — see `workers/sovp-identity`; deployment requires a fresh Draft 04 document and matching DNS key |
 | Replay protection — nonce deduplication | Planned |
 | `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
 | IETF Internet-Draft | [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active |
-| ARD `trustManifest` type registration | In progress — [ards-project/ard-spec #41](https://github.com/ards-project/ard-spec/issues/41) |
+| ARD `trustManifest` type registration | Proposed — open issue [ards-project/ard-spec #41](https://github.com/ards-project/ard-spec/issues/41) |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
 
 ---

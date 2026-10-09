@@ -10,7 +10,12 @@ import dns.exception
 import dns.resolver
 import requests
 
-from .core import verify_identity
+from .core import (
+    REASON_NO_KEY,
+    REASON_SIGNATURE,
+    verify_identity,  # noqa: F401  re-exported: callers import it from sovp.resolver
+    verify_identity_detail,
+)
 from .document_safety import (
     UnverifiedDocumentLimitError,
     parse_unverified_sovp_document,
@@ -30,7 +35,7 @@ def fetch_identity_document(domain: str, timeout: int = 10) -> dict:
     """
     primary_url = f"https://{domain}/.well-known/sovp-identity.json"
     fallback_url = f"https://{domain}/sovp-identity.json"
-    headers = {"User-Agent": "sovp-resolver/1.1.0"}
+    headers = {"User-Agent": "sovp-resolver/1.1.1"}
 
     try:
         resp = requests.get(primary_url, timeout=timeout, headers=headers)
@@ -142,13 +147,29 @@ def resolve_dns_pubkey(domain: str) -> str:
     return resolve_dns_pubkeys(domain, max_keys=1)[0]
 
 
-def validate_domain(domain: str, timeout: int = 10) -> dict:
+def validate_domain(
+    domain: str,
+    timeout: int = 10,
+    check_timestamp: bool = False,
+) -> dict:
     """
     Execute the reference validation pipeline.
 
     The document is retrieved first, the DNS key set is resolved, and each
     published candidate key is tested until one verifies the signed document.
-    Host binding and v2.0 freshness are enforced by verify_identity().
+    Host binding and the v2.0 freshness rules, including freshness.expiresAt,
+    are enforced by verify_identity_detail().
+
+    check_timestamp enables the issuance window of draft Section 9.4 (default
+    W = 600 s) against freshness.created. It is False by default: a statically
+    published .well-known document is re-signed on a validity cycle, not per
+    request, so it cannot satisfy a 600-second window. Section 9.4 permits a
+    longer W by local policy; callers that verify challenge-bound documents
+    pass check_timestamp=True.
+
+    Returns a dict with domain, psi_core (1 or 0), reason, document and
+    public_key_ref. reason names the first failed check as one of the
+    core.REASON_* constants, and is "ok" when psi_core is 1.
     """
     document = fetch_identity_document(domain, timeout=timeout)
     candidate_keys = resolve_dns_pubkeys(domain)
@@ -157,20 +178,30 @@ def validate_domain(domain: str, timeout: int = 10) -> dict:
     signature_b64 = proof.get("signature", "") if isinstance(proof, dict) else ""
 
     psi_core = 0
+    reason = REASON_NO_KEY
     for public_key_b64 in candidate_keys:
-        if verify_identity(
+        verified, candidate_reason = verify_identity_detail(
             document,
             signature_b64,
             public_key_b64,
-            check_timestamp=True,
+            check_timestamp=check_timestamp,
             expected_host=domain,
-        ):
+        )
+        if verified:
             psi_core = 1
+            reason = candidate_reason
             break
+        # Report the most specific failure across the published key set: a
+        # freshness or host failure says more than "none of the keys matched".
+        if reason == REASON_NO_KEY or (
+            reason == REASON_SIGNATURE and candidate_reason != REASON_SIGNATURE
+        ):
+            reason = candidate_reason
 
     return {
         "domain": domain,
         "psi_core": psi_core,
+        "reason": reason,
         "document": document,
         "public_key_ref": f"dns:txt:_sovp.{domain}",
     }

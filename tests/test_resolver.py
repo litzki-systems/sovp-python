@@ -306,3 +306,129 @@ def test_validate_domain_rejects_expired_v2_document(monkeypatch):
     )
 
     assert resolver.validate_domain("example.com")["psi_core"] == 0
+
+
+def _signed_v2_document(priv, created_delta_seconds=-10, validity_hours=1):
+    """Build a signed v2.0 document with a controllable created offset."""
+    from datetime import datetime, timezone, timedelta
+    from sovp.core import sign_identity
+
+    now = datetime.now(timezone.utc)
+    document = {
+        "@context": "https://litzki-systems.com/protocol/v2.0",
+        "@type": "SovereignIdentity",
+        "entity": {
+            "uid": "urn:sovp:example",
+            "canonical_url": "https://example.com",
+            "verification_method": "Ed25519",
+        },
+        "freshness": {
+            "created": (
+                now + timedelta(seconds=created_delta_seconds)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "nonce": "resolver-window-test",
+            "expiresAt": (
+                now + timedelta(hours=validity_hours)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    }
+    document["integrity_proof"] = {
+        "signature": sign_identity(priv, document),
+        "public_key_ref": "dns:txt:_sovp.example.com",
+    }
+    return document
+
+
+def test_validate_domain_accepts_a_statically_published_document_by_default(monkeypatch):
+    """V11 fund 1: the issuance window of draft 9.4 must not run by default.
+
+    A .well-known document is re-signed on its validity cycle, not per
+    request, so a 600-second window would reject every real deployment --
+    including the reference deployment. Regression guard: a document that is
+    two days old but well inside expiresAt verifies.
+    """
+    from sovp.core import generate_keypair
+
+    priv, pub = generate_keypair()
+    document = _signed_v2_document(
+        priv, created_delta_seconds=-2 * 86400, validity_hours=24 * 88
+    )
+
+    monkeypatch.setattr(
+        resolver, "fetch_identity_document", lambda domain, timeout=10: document
+    )
+    monkeypatch.setattr(resolver, "resolve_dns_pubkeys", lambda domain: [pub])
+
+    result = resolver.validate_domain("example.com")
+    assert result["psi_core"] == 1
+    assert result["reason"] == "ok"
+
+
+def test_validate_domain_applies_the_issuance_window_on_request(monkeypatch):
+    """The window stays available for challenge-bound documents."""
+    from sovp.core import generate_keypair
+
+    priv, pub = generate_keypair()
+    document = _signed_v2_document(
+        priv, created_delta_seconds=-2 * 86400, validity_hours=24 * 88
+    )
+
+    monkeypatch.setattr(
+        resolver, "fetch_identity_document", lambda domain, timeout=10: document
+    )
+    monkeypatch.setattr(resolver, "resolve_dns_pubkeys", lambda domain: [pub])
+
+    result = resolver.validate_domain("example.com", check_timestamp=True)
+    assert result["psi_core"] == 0
+    assert result["reason"] == "issuance_window"
+
+
+def test_validate_domain_reports_expiry_apart_from_a_bad_signature(monkeypatch):
+    """reason must tell "old" apart from "forged" -- fund 1's second half."""
+    from sovp.core import generate_keypair
+
+    priv, pub = generate_keypair()
+
+    expired = _signed_v2_document(
+        priv, created_delta_seconds=-10 * 86400, validity_hours=-24
+    )
+    monkeypatch.setattr(
+        resolver, "fetch_identity_document", lambda domain, timeout=10: expired
+    )
+    monkeypatch.setattr(resolver, "resolve_dns_pubkeys", lambda domain: [pub])
+    result = resolver.validate_domain("example.com")
+    assert result["psi_core"] == 0
+    assert result["reason"] == "expired"
+
+    tampered = _signed_v2_document(priv)
+    tampered["entity"] = dict(tampered["entity"])
+    tampered["entity"]["uid"] = "urn:sovp:attacker"
+    monkeypatch.setattr(
+        resolver, "fetch_identity_document", lambda domain, timeout=10: tampered
+    )
+    result = resolver.validate_domain("example.com")
+    assert result["psi_core"] == 0
+    assert result["reason"] == "signature"
+
+
+def test_validate_domain_reports_host_mismatch(monkeypatch):
+    from sovp.core import generate_keypair, sign_identity
+
+    priv, pub = generate_keypair()
+    document = _signed_v2_document(priv)
+    document["entity"] = dict(document["entity"])
+    document["entity"]["canonical_url"] = "https://attacker.example"
+    document["integrity_proof"] = dict(document["integrity_proof"])
+    document["integrity_proof"]["signature"] = sign_identity(priv, {
+        k: v for k, v in document.items()
+        if k not in ("integrity_proof", "contentAddress", "scan")
+    })
+
+    monkeypatch.setattr(
+        resolver, "fetch_identity_document", lambda domain, timeout=10: document
+    )
+    monkeypatch.setattr(resolver, "resolve_dns_pubkeys", lambda domain: [pub])
+
+    result = resolver.validate_domain("example.com")
+    assert result["psi_core"] == 0
+    assert result["reason"] == "host_mismatch"

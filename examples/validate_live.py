@@ -18,6 +18,7 @@ try:
     result = validate_domain(DOMAIN)
     print(f"Domain:          {result['domain']}")
     print(f"Psi_core:        {result['psi_core']}")
+    print(f"Reason:          {result['reason']}")
     print(f"Public key ref:  {result['public_key_ref']}")
     print(f"Entity UID:      {result['document']['entity']['uid']}")
     print(f"Canonical URL:   {result['document']['entity']['canonical_url']}")
@@ -25,6 +26,6 @@ try:
     if result["psi_core"] == 1:
         print("Result: VERIFIED — identity and integrity confirmed.")
     else:
-        print("Result: FAILED — verification did not pass.")
+        print(f"Result: FAILED — verification did not pass ({result['reason']}).")
 except SOVPResolverError as e:
     print(f"Resolver error: {e}")

@@ -373,3 +373,78 @@ def test_host_binding_rejects_mismatched_host():
     )
     signature = doc["integrity_proof"]["signature"]
     assert verify_identity(doc, signature, pub, expected_host="attacker.example") is False
+
+
+def test_generated_document_defaults_to_ninety_days_validity():
+    """V11 fund 12: the default was one hour, while the docstring and the
+    draft both claimed expiresAt was omitted entirely. Production publishes
+    90 days. One source of truth: DEFAULT_VALIDITY_DAYS."""
+    from datetime import datetime, timezone
+    from sovp.core import (
+        DEFAULT_VALIDITY_DAYS,
+        generate_keypair,
+        generate_identity_document,
+    )
+
+    assert DEFAULT_VALIDITY_DAYS == 90
+
+    priv, _pub = generate_keypair()
+    document = generate_identity_document(
+        priv, "urn:sovp:example", "https://example.com"
+    )
+
+    created = datetime.fromisoformat(
+        document["freshness"]["created"].replace("Z", "+00:00")
+    )
+    expires_at = datetime.fromisoformat(
+        document["freshness"]["expiresAt"].replace("Z", "+00:00")
+    )
+    assert (expires_at - created).days == DEFAULT_VALIDITY_DAYS
+    assert expires_at > datetime.now(timezone.utc)
+
+
+def test_generated_document_honours_an_explicit_expiry():
+    from sovp.core import generate_keypair, generate_identity_document
+
+    priv, _pub = generate_keypair()
+    document = generate_identity_document(
+        priv,
+        "urn:sovp:example",
+        "https://example.com",
+        expires_at="2027-01-01T00:00:00Z",
+    )
+    assert document["freshness"]["expiresAt"] == "2027-01-01T00:00:00Z"
+
+
+def test_verify_identity_detail_names_the_failing_check():
+    from sovp.core import (
+        generate_keypair,
+        generate_identity_document,
+        verify_identity,
+        verify_identity_detail,
+    )
+
+    priv, pub = generate_keypair()
+    document = generate_identity_document(
+        priv, "urn:sovp:example", "https://example.com"
+    )
+    signature = document["integrity_proof"]["signature"]
+
+    assert verify_identity_detail(document, signature, pub) == (True, "ok")
+    # The boolean contract of verify_identity() is unchanged.
+    assert verify_identity(document, signature, pub) is True
+
+    assert verify_identity_detail(
+        document, signature, pub, expected_host="attacker.example"
+    ) == (False, "host_mismatch")
+
+    tampered = dict(document)
+    tampered["entity"] = dict(document["entity"])
+    tampered["entity"]["uid"] = "urn:sovp:attacker"
+    assert verify_identity_detail(tampered, signature, pub)[1] == "signature"
+
+    # max_age_seconds below the 60 s clock-skew allowance forces the window
+    # to fail deterministically for a document created "now".
+    assert verify_identity_detail(
+        document, signature, pub, check_timestamp=True, max_age_seconds=-120
+    ) == (False, "issuance_window")
