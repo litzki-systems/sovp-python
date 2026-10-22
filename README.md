@@ -1,6 +1,6 @@
 # sovp-python
 
-**sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp), a pre-ingestion verification protocol for validating a signed identity document before its contents are ingested. SOVP verifies that the document was signed by the party controlling an Ed25519 public key published for the document host in DNS. It operates at Layer 0, before the document body is ingested. To get started, run `pip install sovp`. This exposes the `sovp.core` Python API and the `sovp` CLI. For development, clone the repo and run `pip install -e .` instead.
+**sovp-python** is the reference implementation of the [Sovereign Validation Protocol (SOVP)](https://litzki-systems.com/sovp), a pre-ingestion verification protocol for validating a signed identity document before its contents are ingested. SOVP verifies that the document was signed by the party controlling an Ed25519 public key published for the document host in DNS. It operates at Layer 0, before the document body is ingested. To get started, run `pip install sovp`. This exposes the `sovp.core` and `sovp.resolver` Python APIs and the `sovp` CLI. For development, clone the repo and run `pip install -e .` instead.
 
 > **Protocol specification:** [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — IETF Internet-Draft
 
@@ -26,7 +26,7 @@ Psi_core = Verify(K_pub, sigma, JCS(M))
 `Psi_core = 1` — source verified, proceed with ingestion.  
 `Psi_core = 0` — verification failed, ingestion blocked.
 
-> **Scope of this reference implementation:** This library provides Ed25519 signing and verification primitives for SOVP identity documents, plus DNS TXT record resolution and HTTP retrieval of `sovp-identity.json` via `sovp.resolver` (`resolve_dns_pubkey()`, `fetch_identity_document()`, `validate_domain()`). Mode B gateway behavior — an active, caching relay rather than a one-shot check — is implementation-defined and not included in this package.
+> **Scope of this reference implementation:** This library provides Ed25519 signing and verification primitives for SOVP identity documents, plus automatic DNS TXT key resolution and HTTP retrieval of `sovp-identity.json` via `sovp.resolver` (`resolve_dns_pubkeys()`, `resolve_dns_pubkey()`, `fetch_identity_document()`, `validate_domain()`). Mode B gateway behavior — an active, caching relay rather than a one-shot check — is implementation-defined and not included in this package.
 
 ---
 
@@ -71,7 +71,7 @@ cd sovp-python
 pip install -e .
 ```
 
-This installs the `sovp` CLI and the `sovp.core` library. Dependencies (`cryptography`, `jcs`, `dnspython`, `requests`) are declared in `pyproject.toml`.
+This installs the `sovp` CLI and the `sovp.core` and `sovp.resolver` modules. Dependencies (`cryptography`, `jcs`, `dnspython`, `requests`) are declared in `pyproject.toml`.
 
 ---
 
@@ -278,7 +278,18 @@ _sovp.yourdomain.tld  IN  TXT  "v=SOVP1; k=<your-Ed25519-public-key-base64>"
 
 Recommended TTL: 300 seconds (per draft Section 9.3). DNSSEC recommended for the `_sovp` zone.
 
-> Automatic DNS resolution is implemented in `sovp.resolver.resolve_dns_pubkey()` (see "Live validation example" below and the Roadmap). `verify_identity()` itself remains a pure function and still expects the key to be supplied directly; `sovp.resolver` is what resolves it from DNS on the caller's behalf.
+> **Automatic DNS resolution is implemented** (added in 1.0.2, shipped in the
+> installable wheel since 1.0.4). `sovp.resolver.resolve_dns_pubkeys()` reads
+> all `v=SOVP1` TXT records at `_sovp.<host>` (up to four, so a key can be
+> rotated by publishing old and new key side by side), and `validate_domain()`
+> uses that key set; `resolve_dns_pubkey()` returns the first matching key for
+> callers that need one. Records that do not match the exact
+> `v=SOVP1; k=<base64>` shape or do not decode to a 32-byte Ed25519 key are
+> ignored. See "Live validation example" below.
+>
+> The `sovp.core` functions (`verify_identity()`, `verify_identity_detail()`)
+> do no network I/O by design: they take the public key as an argument.
+> Use `sovp.resolver` when the key should come from DNS.
 
 ---
 
@@ -333,13 +344,13 @@ files are not part of the PyPI distribution — clone the repo to run them.
 | CLI (`generate-keypair`, `sign`, `verify`) | Implemented |
 | Replay protection — timestamp validation (`check_timestamp=True`) | Implemented |
 | `contentAddress` digest (SHA-256 over JCS bytes) | Implemented |
-| DNS + HTTP resolution in `SOVPValidator` | Implemented — see `sovp.resolver` |
+| Automatic DNS key resolution (`_sovp` TXT, key-set rotation) and HTTP document retrieval | Implemented — see `sovp.resolver` |
 | RFC conformance test vectors | Implemented — see `tests/test_vectors.py` |
 | Live validation (`validate_domain()`) | Implemented — see `sovp.resolver` |
 | AgenTrust Marketplace integration | Implemented — see [sovp-agentrust-bridge](https://github.com/litzki-systems/sovp-agentrust-bridge) |
 | Reference identity-endpoint deployment (Cloudflare Worker) | Implemented — see `workers/sovp-identity`; deployment requires a fresh Draft 04 document and matching DNS key |
 | Replay protection — nonce deduplication | Planned |
-| `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API | Planned |
+| `SOVPIdentity` / `SOVPSigner` / `SOVPValidator` class API (object-oriented wrapper over the existing functions) | Planned |
 | IETF Internet-Draft | [draft-litzki-sovp](https://datatracker.ietf.org/doc/draft-litzki-sovp/) — active |
 | ARD `trustManifest` type registration | Proposed — open issue [ards-project/ard-spec #41](https://github.com/ards-project/ard-spec/issues/41) |
 | U.S. Provisional Patent | Filed — No. 64/005,737 |
