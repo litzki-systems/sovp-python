@@ -3,6 +3,23 @@
 All notable changes to the sovp Python package are documented here.
 Protocol specification: [draft-litzki-sovp-04](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 
+## [Unreleased]
+
+### Documentation
+- `README.md` — DNS resolution status made unambiguous. The Roadmap row read
+  "DNS + HTTP resolution in `SOVPValidator`: Implemented" while the same table
+  lists the `SOVPValidator` class as "Planned"; the row now names what is
+  implemented (`sovp.resolver`). The DNS setup note now states that automatic
+  resolution is implemented, documents the key-set behavior of
+  `resolve_dns_pubkeys()` (up to four `v=SOVP1` records, for rotation), and
+  separates it from the network-free `sovp.core` verification functions. The
+  intro and install section now name `sovp.resolver` alongside `sovp.core`.
+- Note for readers of older PyPI release pages: the READMEs published with
+  1.0.1 through 1.0.5 still contain the outdated sentence "Automatic DNS
+  resolution is not yet implemented." That sentence was wrong from 1.0.2 on and
+  was removed from the README on `main` on 2026-09-20 (published since 1.1.0).
+  PyPI release descriptions are immutable, so those pages cannot be corrected.
+
 ## [1.1.1] — 2026-10-09
 
 External review of the published surface (report V11) found that the documented
