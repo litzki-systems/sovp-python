@@ -20,6 +20,10 @@ attacker-controlled document is trusted with any further processing.
 from __future__ import annotations
 
 import json
+import re
+
+# JSON number grammar of RFC 8259 Section 6.
+_JSON_NUMBER = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 
 MAX_UNVERIFIED_DOCUMENT_BYTES = 64 * 1024
 MAX_UNVERIFIED_DOCUMENT_DEPTH = 16
@@ -109,6 +113,8 @@ def parse_unverified_sovp_document(
             while pos < n and text[pos].isdigit():
                 pos += 1
         token = text[start:pos]
+        if not _JSON_NUMBER.fullmatch(token):
+            fail(f"invalid number {token!r}")
         return float(token) if any(ch in token for ch in ".eE") else int(token)
 
     def parse_string():
@@ -130,7 +136,10 @@ def parse_unverified_sovp_document(
             fail("unterminated string")
         # Delegate escape-sequence decoding to json.loads on the isolated
         # string literal rather than re-implementing it by hand.
-        return json.loads(text[start:pos])
+        try:
+            return json.loads(text[start:pos])
+        except ValueError:
+            fail("invalid string literal")
 
     def parse_object(depth: int):
         nonlocal pos

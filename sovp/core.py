@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import jcs
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
@@ -28,6 +30,34 @@ REASON_CREATED_IN_FUTURE = "created_in_future"
 REASON_EXPIRED = "expired"
 REASON_ISSUANCE_WINDOW = "issuance_window"
 REASON_NO_KEY = "no_key"
+REASON_DOCUMENT_INVALID = "document_invalid"
+
+# Outcome names of draft-litzki-sovp-04 Section 6.2, Table 3, for each reason
+# code above. The reason codes are kept for backward compatibility; callers
+# that compare results with other implementations use the draft outcome.
+DRAFT_OUTCOMES = {
+    REASON_OK: "verified",
+    REASON_DOCUMENT_INVALID: "document_invalid",
+    REASON_FRESHNESS_MISSING: "document_invalid",
+    REASON_FRESHNESS_INVALID: "document_invalid",
+    REASON_HOST_MISMATCH: "host_mismatch",
+    REASON_NO_KEY: "key_unresolved",
+    REASON_SIGNATURE: "invalid_signature",
+    REASON_CREATED_IN_FUTURE: "stale",
+    REASON_ISSUANCE_WINDOW: "stale",
+    REASON_EXPIRED: "stale",
+}
+
+# Schema identifiers this verifier supports (draft Section 6.2 step 1).
+# v2.0 is the revision defined by draft-04; v1.4 is the earlier schema, which
+# Section 9.4 lets a verifier keep supporting with best-effort freshness only.
+CONTEXT_V2 = "https://litzki-systems.com/protocol/v2.0"
+CONTEXT_V1_4 = "https://litzki-systems.com/protocol/v1.4"
+SUPPORTED_CONTEXTS = frozenset({CONTEXT_V2, CONTEXT_V1_4})
+
+# RFC 3339 date-time in UTC with a literal Z and no fractional seconds,
+# as draft Section 5 requires for the members of freshness.
+_UTC_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 # Default validity of a generated identity document, in days. Matches the
 # 90-day window the production deployments publish; draft Section 9.4 leaves
@@ -104,8 +134,65 @@ def sign_identity(private_key_b64: str, identity_metadata: dict) -> str:
 
 
 def _is_v2_document(identity_metadata: dict) -> bool:
-    context = identity_metadata.get("@context")
-    return isinstance(context, str) and "/v2.0" in context
+    return identity_metadata.get("@context") == CONTEXT_V2
+
+
+def _strict_b64decode(value: object, length: int) -> bytes:
+    """Decode standard Base64 with padding (RFC 4648 Section 4) of a fixed length."""
+    if not isinstance(value, str):
+        raise ValueError("value must be a string")
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("value is not strict standard Base64") from exc
+    if len(decoded) != length or base64.b64encode(decoded).decode("ascii") != value:
+        raise ValueError(f"value must encode exactly {length} octets")
+    return decoded
+
+
+def document_shape_reason(
+    identity_metadata: object,
+    expected_host: str | None = None,
+) -> str | None:
+    """Apply draft Section 6.2 steps 1 and 3 to a parsed document.
+
+    Returns None when the document is a JSON object with a supported
+    @context, @type and entity.verification_method and, if expected_host is
+    given, names that host in entity.canonical_url. Otherwise returns the
+    reason code of the first failed check. Needs no key and no network.
+    """
+    if not isinstance(identity_metadata, dict):
+        return REASON_DOCUMENT_INVALID
+    if identity_metadata.get("@context") not in SUPPORTED_CONTEXTS:
+        return REASON_DOCUMENT_INVALID
+    if identity_metadata.get("@type") != "SovereignIdentity":
+        return REASON_DOCUMENT_INVALID
+    entity = identity_metadata.get("entity")
+    if not isinstance(entity, dict) or entity.get("verification_method") != "Ed25519":
+        return REASON_DOCUMENT_INVALID
+
+    if expected_host is not None:
+        canonical_url = entity.get("canonical_url")
+        if not isinstance(canonical_url, str):
+            return REASON_HOST_MISMATCH
+        try:
+            hostname = urlparse(canonical_url).hostname
+        except ValueError:
+            return REASON_HOST_MISMATCH
+        if not hostname:
+            return REASON_HOST_MISMATCH
+        if hostname.rstrip(".").lower() != expected_host.rstrip(".").lower():
+            return REASON_HOST_MISMATCH
+    return None
+
+
+def _parse_strict_timestamp(value: object) -> datetime:
+    """Parse a freshness timestamp in the exact form draft Section 5 requires."""
+    if not isinstance(value, str) or not _UTC_TIMESTAMP.fullmatch(value):
+        raise ValueError(
+            "timestamp must be RFC 3339 UTC with a literal Z and no fractional seconds"
+        )
+    return _parse_timestamp(value)
 
 
 def _parse_timestamp(value: object) -> datetime:
@@ -140,8 +227,11 @@ def _validate_freshness(
                 "v2.0 documents require freshness.created and freshness.expiresAt",
             )
 
-        created = _parse_timestamp(created_str)
-        expires_at = _parse_timestamp(expires_at_str)
+        try:
+            created = _parse_strict_timestamp(created_str)
+            expires_at = _parse_strict_timestamp(expires_at_str)
+        except ValueError as exc:
+            raise FreshnessError(REASON_FRESHNESS_INVALID, str(exc)) from exc
 
         if expires_at <= created:
             raise FreshnessError(
@@ -155,12 +245,12 @@ def _validate_freshness(
                 REASON_CREATED_IN_FUTURE,
                 "freshness.created is too far in the future",
             )
-        if now > expires_at + timedelta(seconds=clock_skew_seconds):
+        # Section 9.4 item 4: no allowance on expiry.
+        if now > expires_at:
             raise FreshnessError(REASON_EXPIRED, "freshness.expiresAt has expired")
 
-        if check_timestamp and now > created + timedelta(
-            seconds=max_age_seconds + clock_skew_seconds
-        ):
+        # Section 9.4 item 3: now - W <= created; N applies to the future only.
+        if check_timestamp and now > created + timedelta(seconds=max_age_seconds):
             raise FreshnessError(
                 REASON_ISSUANCE_WINDOW,
                 "freshness.created is outside the issuance window",
@@ -188,7 +278,7 @@ def _validate_freshness(
                 REASON_CREATED_IN_FUTURE,
                 "created timestamp is too far in the future",
             )
-        if now > created + timedelta(seconds=max_age_seconds + clock_skew_seconds):
+        if now > created + timedelta(seconds=max_age_seconds):
             raise FreshnessError(
                 REASON_ISSUANCE_WINDOW,
                 "created timestamp is outside the issuance window",
@@ -211,25 +301,14 @@ def verify_identity_detail(
     module. On success the reason is REASON_OK.
     """
     try:
-        if expected_host is not None:
-            entity = identity_metadata.get("entity")
-            canonical_url = (
-                entity.get("canonical_url") if isinstance(entity, dict) else None
-            )
-            if not isinstance(canonical_url, str):
-                return False, REASON_HOST_MISMATCH
-            parsed = urlparse(canonical_url)
-            if not parsed.hostname:
-                return False, REASON_HOST_MISMATCH
-            actual_host = parsed.hostname.rstrip(".").lower()
-            wanted_host = expected_host.rstrip(".").lower()
-            if actual_host != wanted_host:
-                return False, REASON_HOST_MISMATCH
+        shape_reason = document_shape_reason(identity_metadata, expected_host)
+        if shape_reason is not None:
+            return False, shape_reason
 
         try:
-            pub_bytes = base64.b64decode(public_key_b64)
+            pub_bytes = _strict_b64decode(public_key_b64, 32)
             public_key = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
-            sig_bytes = base64.b64decode(signature_b64)
+            sig_bytes = _strict_b64decode(signature_b64, 64)
 
             payload = {
                 k: v for k, v in identity_metadata.items()

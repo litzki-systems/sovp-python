@@ -223,7 +223,7 @@ sovp verify --payload test_payload.json --sig <base64-signature> --pubkey <base6
 | Canonicalization | JSON Canonicalization Scheme / JCS (RFC 8785) |
 | Hashing | Ed25519 pure mode (RFC 8032) — `sign(JCS(M))`, no external pre-hash applied |
 | Key distribution | DNS TXT at `_sovp.yourdomain.tld` |
-| Freshness | Signed `freshness.created` and `freshness.expiresAt` validation; the reference resolver applies the 600 s issuance window when timestamp checking is enabled |
+| Freshness | Signed `freshness.created` and `freshness.expiresAt`, RFC 3339 UTC with `Z` and no fractional seconds; expiry checked without allowance; the 600 s issuance window (60 s skew toward the future only) applies when timestamp checking is enabled |
 
 ---
 
@@ -302,24 +302,38 @@ network access, nothing to clone):
 from sovp.resolver import validate_domain
 
 result = validate_domain("litzki-systems.com")
-print(result["psi_core"], result["reason"], result["document"]["entity"]["uid"])
+print(result["psi_core"], result["outcome"], result["document"]["entity"]["uid"])
 ```
 
 Output:
 ```
-1 ok urn:sovp:litzki-systems-llc
+1 verified urn:sovp:litzki-systems-llc
 ```
 
-`validate_domain()` runs the full pipeline: DNS TXT resolution of the `_sovp`
-key set, HTTP retrieval of `/.well-known/sovp-identity.json`, host binding,
-the v2.0 freshness rules including `freshness.expiresAt`, and Ed25519
-verification against each published candidate key.
+`validate_domain()` runs the checks of draft Section 6.2 in its order:
+retrieval of `/.well-known/sovp-identity.json` (fallback to the root path only
+on HTTP 404, redirects not followed, size, depth and duplicate-member limits),
+supported `@context`, `@type` and `verification_method`, host binding,
+resolution of the `_sovp` DNS key set, Ed25519 verification against each
+published candidate key, and the v2.0 freshness rules. A document from an IP
+literal is refused before any retrieval.
 
-`reason` names the first check that failed and is `"ok"` on success. The
-values are `host_mismatch`, `signature`, `freshness_missing`,
-`freshness_invalid`, `created_in_future`, `expired`, `issuance_window` and
-`no_key` — so a document that is merely past its validity window is
-distinguishable from one whose signature does not hold.
+`outcome` gives the result under the outcome names of draft Section 6.2,
+Table 3. `reason` names the same result in more detail and is kept for
+backward compatibility:
+
+| `reason` | `outcome` (Draft 04) |
+|---|---|
+| `ok` | `verified` |
+| `document_invalid`, `freshness_missing`, `freshness_invalid` | `document_invalid` |
+| `host_mismatch` | `host_mismatch` |
+| `no_key` | `key_unresolved` |
+| `signature` | `invalid_signature` |
+| `created_in_future`, `expired`, `issuance_window` | `stale` |
+
+`core.DRAFT_OUTCOMES` holds the same mapping. Retrieval failures
+(`evidence_missing`) and DNS failures (`key_unresolved`) raise
+`SOVPResolverError`.
 
 > **Issuance window.** `validate_domain()` does **not** apply the issuance
 > window of draft Section 9.4 by default. A statically published

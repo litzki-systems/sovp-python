@@ -7,7 +7,13 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from sovp import core, resolver
-from sovp.core import generate_identity_document, generate_keypair, sign_identity, verify_identity
+from sovp.core import (
+    generate_identity_document,
+    generate_keypair,
+    sign_identity,
+    verify_identity,
+    verify_identity_detail,
+)
 
 
 def _v2_document(canonical_url="https://example.com", **extra):
@@ -79,16 +85,35 @@ def test_v2_freshness_future_clock_skew_exceeded():
         core.datetime = original
 
 
-def test_v2_freshness_expiry_clock_skew_boundary():
+def test_v2_expiry_boundary_is_inclusive():
+    """Section 9.4 item 4 rejects only when now > expiresAt."""
     priv, pub = generate_keypair()
     document, _ = _v2_document()
     document["freshness"]["created"] = "2026-10-08T00:58:50Z"
-    document["freshness"]["expiresAt"] = "2026-10-08T00:59:01Z"
+    document["freshness"]["expiresAt"] = "2026-10-08T01:00:00Z"
     document, signature = _sign_document(priv, document)
 
     original = _freeze_core(datetime(2026, 10, 8, 1, 0, 0, tzinfo=timezone.utc))
     try:
         assert verify_identity(document, signature, pub) is True
+    finally:
+        core.datetime = original
+
+
+def test_v2_expiry_has_no_clock_skew_allowance():
+    """Section 9.4 item 4: a document expired one second ago is stale.
+
+    Up to 1.1.1 the verifier added 60 seconds of clock skew to expiresAt.
+    """
+    priv, pub = generate_keypair()
+    document, _ = _v2_document()
+    document["freshness"]["created"] = "2026-10-08T00:58:50Z"
+    document["freshness"]["expiresAt"] = "2026-10-08T00:59:59Z"
+    document, signature = _sign_document(priv, document)
+
+    original = _freeze_core(datetime(2026, 10, 8, 1, 0, 0, tzinfo=timezone.utc))
+    try:
+        assert verify_identity_detail(document, signature, pub) == (False, "expired")
     finally:
         core.datetime = original
 
@@ -106,10 +131,11 @@ def test_v2_freshness_expiry_clock_skew_exceeded():
         core.datetime = original
 
 
-def test_v2_issuance_window_clock_skew_boundary():
+def test_v2_issuance_window_boundary_is_w_without_skew():
+    """Section 9.4 item 3: now - W <= created. N applies to the future only."""
     priv, pub = generate_keypair()
     document, _ = _v2_document()
-    document["freshness"]["created"] = "2026-10-08T00:49:00Z"
+    document["freshness"]["created"] = "2026-10-08T00:50:00Z"
     document["freshness"]["expiresAt"] = "2026-10-08T02:00:00Z"
     document, signature = _sign_document(priv, document)
 
@@ -120,10 +146,11 @@ def test_v2_issuance_window_clock_skew_boundary():
         core.datetime = original
 
 
-def test_v2_issuance_window_rejects_beyond_clock_skew():
+def test_v2_issuance_window_rejects_one_second_beyond_w():
+    """Up to 1.1.1 the verifier accepted created up to W + 60 seconds old."""
     priv, pub = generate_keypair()
     document, _ = _v2_document()
-    document["freshness"]["created"] = "2026-10-08T00:48:59Z"
+    document["freshness"]["created"] = "2026-10-08T00:49:59Z"
     document["freshness"]["expiresAt"] = "2026-10-08T02:00:00Z"
     document, signature = _sign_document(priv, document)
 

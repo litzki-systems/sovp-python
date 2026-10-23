@@ -3,7 +3,55 @@
 All notable changes to the sovp Python package are documented here.
 Protocol specification: [draft-litzki-sovp-04](https://datatracker.ietf.org/doc/draft-litzki-sovp/)
 
-## [Unreleased]
+## [1.1.2] — 2026-10-23
+
+A conformance review of 1.1.1 against draft-litzki-sovp-04 found eleven places
+where the verifier accepted or handled input differently from the draft. Each
+case has a regression test in `tests/test_draft04_review_1_1_2.py`. The live
+documents on litzki-systems.com and certavia.org verify unchanged.
+
+### Changed (stricter, as the draft requires)
+- Section 6.2 step 1: a document with an unsupported `@context`, an `@type`
+  other than `SovereignIdentity`, or an `entity.verification_method` other than
+  `Ed25519` is now `document_invalid`. 1.1.1 verified such documents. Supported
+  contexts are `https://litzki-systems.com/protocol/v2.0` and, as Section 9.4
+  allows, `https://litzki-systems.com/protocol/v1.4`. v2.0 is recognized by the
+  exact context string, not by a substring.
+- Sections 5 and 9.4 item 1: `freshness.created` and `freshness.expiresAt` must
+  be RFC 3339 UTC with a literal `Z` and no fractional seconds. 1.1.1 accepted
+  offsets such as `+02:00` and fractional seconds.
+- Section 9.4 item 4: a document is stale as soon as `now > expiresAt`. 1.1.1
+  added 60 seconds of clock skew to the expiry.
+- Section 9.4 item 3: the issuance window is `now - W <= created`; the clock
+  skew allowance applies toward the future only. 1.1.1 accepted `created` up
+  to `W + 60` seconds old.
+- Section 5: the signature and the public key must be strict standard Base64
+  of exactly 64 and 32 octets. 1.1.1 skipped characters outside the alphabet.
+- Section 6.2: `validate_domain()` applies the document and host-binding checks
+  before it queries DNS, following the fixed order of the draft. 1.1.1 resolved
+  the key first and reported a DNS failure for a document that names the wrong
+  host.
+- Section 6.2: `validate_domain()` and `fetch_identity_document()` refuse an IP
+  literal before any retrieval, and accept only a bare host name (no scheme,
+  port or path). The host is lowercased, its trailing dot removed and converted
+  to its A-label form.
+- Section 9.9: redirects are no longer followed. 1.1.1 followed every redirect,
+  including from https to http.
+- Section 6.2 step 1: a retrieved document that is not a JSON object, or not
+  valid UTF-8, raises `SOVPResolverError`. 1.1.1 crashed with `AttributeError`
+  on a JSON array.
+- Section 9.8: the body is read in chunks and rejected as soon as it exceeds
+  65536 octets, instead of after the whole response was loaded. Malformed
+  numbers and string escapes raise `UnverifiedDocumentLimitError` instead of a
+  bare `ValueError`.
+- A TXT record that is not valid UTF-8 is ignored, like any other record that
+  does not match `v=SOVP1; k=...`. 1.1.1 crashed on it.
+
+### Added
+- `validate_domain()` returns `outcome`, the result under the outcome names of
+  draft Section 6.2, Table 3. `core.DRAFT_OUTCOMES` maps every `reason` code to
+  its outcome. `reason` is unchanged.
+- `core.document_shape_reason()` and `resolver.normalize_retrieval_host()`.
 
 ### Documentation
 - `README.md` — DNS resolution status made unambiguous. The Roadmap row read

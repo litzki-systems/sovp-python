@@ -5,18 +5,22 @@ from __future__ import annotations
 
 import base64
 import binascii
+import ipaddress
 
 import dns.exception
 import dns.resolver
 import requests
 
 from .core import (
+    DRAFT_OUTCOMES,
     REASON_NO_KEY,
     REASON_SIGNATURE,
+    document_shape_reason,
     verify_identity,  # noqa: F401  re-exported: callers import it from sovp.resolver
     verify_identity_detail,
 )
 from .document_safety import (
+    MAX_UNVERIFIED_DOCUMENT_BYTES,
     UnverifiedDocumentLimitError,
     parse_unverified_sovp_document,
 )
@@ -26,41 +30,116 @@ class SOVPResolverError(Exception):
     pass
 
 
+USER_AGENT = "sovp-resolver/1.1.2"
+
+
+def normalize_retrieval_host(domain: str) -> str:
+    """
+    Return the retrieval host of draft Section 6.2: lowercase, no trailing dot.
+
+    Raises SOVPResolverError for an IP literal (the draft forbids verifying a
+    document retrieved from one), for a host with a port, scheme, path or
+    whitespace, and for an empty host.
+    """
+    if not isinstance(domain, str):
+        raise SOVPResolverError("domain must be a string")
+    host = domain.strip().rstrip(".").lower()
+    if not host:
+        raise SOVPResolverError(f"invalid host {domain!r}")
+    if any(ch in host for ch in "/:@?#[] \t"):
+        raise SOVPResolverError(
+            f"invalid host {domain!r}: give a bare host name without scheme, port or path"
+        )
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        raise SOVPResolverError(
+            f"refusing IP literal {domain!r}: draft Section 6.2 forbids verifying "
+            "a document retrieved from an IP address"
+        )
+    try:
+        return host.encode("idna").decode("ascii")
+    except UnicodeError as exc:
+        raise SOVPResolverError(f"invalid host {domain!r}: {exc}") from exc
+
+
+def _get(url: str, timeout: int):
+    try:
+        # Draft Section 9.9: do not follow redirects. A 3xx answer is a
+        # retrieval failure like any other status except 200 and 404.
+        return requests.get(
+            url,
+            timeout=timeout,
+            headers={"User-Agent": USER_AGENT},
+            allow_redirects=False,
+            stream=True,
+        )
+    except requests.RequestException as exc:
+        raise SOVPResolverError(f"failed to retrieve {url}: {exc}") from exc
+
+
+def _read_body(resp, url: str) -> bytes:
+    """Read at most the size limit plus one octet, after content decoding."""
+    body = b""
+    try:
+        for chunk in resp.iter_content(chunk_size=8192):
+            body += chunk
+            if len(body) > MAX_UNVERIFIED_DOCUMENT_BYTES:
+                raise SOVPResolverError(
+                    f"resource limit violated at {url}: document exceeds "
+                    f"{MAX_UNVERIFIED_DOCUMENT_BYTES} bytes"
+                )
+    except requests.RequestException as exc:
+        raise SOVPResolverError(f"failed to read {url}: {exc}") from exc
+    finally:
+        resp.close()
+    return body
+
+
 def fetch_identity_document(domain: str, timeout: int = 10) -> dict:
     """
     Fetch the SOVP identity document.
 
     The well-known endpoint is authoritative. The legacy path is used only
-    when the well-known endpoint returns HTTP 404.
+    when the well-known endpoint returns HTTP 404. Redirects are not
+    followed. The body is read under the size limit of draft Section 9.8,
+    decoded as UTF-8 and parsed under the depth and duplicate-member limits;
+    a document that is not a JSON object is rejected.
     """
-    primary_url = f"https://{domain}/.well-known/sovp-identity.json"
-    fallback_url = f"https://{domain}/sovp-identity.json"
-    headers = {"User-Agent": "sovp-resolver/1.1.1"}
+    host = normalize_retrieval_host(domain)
+    primary_url = f"https://{host}/.well-known/sovp-identity.json"
+    fallback_url = f"https://{host}/sovp-identity.json"
 
-    try:
-        resp = requests.get(primary_url, timeout=timeout, headers=headers)
-    except requests.RequestException as exc:
-        raise SOVPResolverError(f"failed to retrieve {primary_url}: {exc}") from exc
-
+    resp = _get(primary_url, timeout)
     url = primary_url
     if resp.status_code == 404:
+        resp.close()
         url = fallback_url
-        try:
-            resp = requests.get(fallback_url, timeout=timeout, headers=headers)
-        except requests.RequestException as exc:
-            raise SOVPResolverError(f"failed to retrieve {fallback_url}: {exc}") from exc
+        resp = _get(fallback_url, timeout)
 
     if resp.status_code != 200:
+        resp.close()
         raise SOVPResolverError(
             f"identity document returned HTTP {resp.status_code} at {url}"
         )
 
+    body = _read_body(resp, url)
     try:
-        return parse_unverified_sovp_document(resp.text)
+        text = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise SOVPResolverError(f"document at {url} is not valid UTF-8") from exc
+
+    try:
+        document = parse_unverified_sovp_document(text)
     except UnverifiedDocumentLimitError as exc:
         raise SOVPResolverError(
             f"resource limit violated at {url}: {exc}"
         ) from exc
+    if not isinstance(document, dict):
+        raise SOVPResolverError(f"document at {url} is not a JSON object")
+    return document
 
 
 def _parse_sovp_txt_record(record: str) -> str | None:
@@ -99,7 +178,7 @@ def resolve_dns_pubkeys(domain: str, max_keys: int = 4) -> list[str]:
     if max_keys < 1:
         raise ValueError("max_keys must be at least 1")
 
-    txt_name = f"_sovp.{domain}"
+    txt_name = f"_sovp.{normalize_retrieval_host(domain)}"
 
     try:
         answers = dns.resolver.resolve(txt_name, "TXT")
@@ -118,10 +197,13 @@ def resolve_dns_pubkeys(domain: str, max_keys: int = 4) -> list[str]:
 
     keys: list[str] = []
     for rdata in answers:
-        record = "".join(
-            chunk.decode("utf-8") if isinstance(chunk, bytes) else chunk
-            for chunk in rdata.strings
-        )
+        try:
+            record = "".join(
+                chunk.decode("utf-8") if isinstance(chunk, bytes) else chunk
+                for chunk in rdata.strings
+            )
+        except UnicodeDecodeError:
+            continue  # cannot be a v=SOVP1 record; ignored like any other
         key = _parse_sovp_txt_record(record)
         if key is None:
             continue
@@ -167,11 +249,31 @@ def validate_domain(
     longer W by local policy; callers that verify challenge-bound documents
     pass check_timestamp=True.
 
-    Returns a dict with domain, psi_core (1 or 0), reason, document and
-    public_key_ref. reason names the first failed check as one of the
-    core.REASON_* constants, and is "ok" when psi_core is 1.
+    Checks follow the order of draft Section 6.2: retrieval and document
+    shape, host binding, key resolution, signature, freshness. A failure in
+    the document or host binding is reported before DNS is queried.
+
+    Returns a dict with domain, psi_core (1 or 0), reason, outcome, document
+    and public_key_ref. reason names the first failed check as one of the
+    core.REASON_* constants, and is "ok" when psi_core is 1. outcome is the
+    same result under the outcome names of draft Section 6.2, Table 3.
+    Retrieval failures (evidence_missing) and key resolution failures
+    (key_unresolved) raise SOVPResolverError.
     """
+    domain = normalize_retrieval_host(domain)
     document = fetch_identity_document(domain, timeout=timeout)
+
+    shape_reason = document_shape_reason(document, expected_host=domain)
+    if shape_reason is not None:
+        return {
+            "domain": domain,
+            "psi_core": 0,
+            "reason": shape_reason,
+            "outcome": DRAFT_OUTCOMES[shape_reason],
+            "document": document,
+            "public_key_ref": f"dns:txt:_sovp.{domain}",
+        }
+
     candidate_keys = resolve_dns_pubkeys(domain)
 
     proof = document.get("integrity_proof", {})
@@ -202,6 +304,7 @@ def validate_domain(
         "domain": domain,
         "psi_core": psi_core,
         "reason": reason,
+        "outcome": DRAFT_OUTCOMES[reason],
         "document": document,
         "public_key_ref": f"dns:txt:_sovp.{domain}",
     }

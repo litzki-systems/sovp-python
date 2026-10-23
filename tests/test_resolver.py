@@ -9,9 +9,20 @@ import sovp.resolver as resolver
 
 
 class _FakeResponse:
+    """Minimal stand-in for a streamed requests.Response."""
+
     def __init__(self, status_code, text):
         self.status_code = status_code
         self.text = text
+        self.content = text.encode("utf-8") if isinstance(text, str) else text
+        self.closed = False
+
+    def iter_content(self, chunk_size=1):
+        for i in range(0, len(self.content), chunk_size):
+            yield self.content[i:i + chunk_size]
+
+    def close(self):
+        self.closed = True
 
 
 class _FakeRdata:
@@ -70,7 +81,7 @@ def test_fetch_identity_document_rejects_oversized_response(monkeypatch):
 
     oversized_text = _json.dumps({"pad": "x" * 70000})
     monkeypatch.setattr(
-        resolver.requests, "get", lambda url, timeout, headers: _FakeResponse(200, oversized_text)
+        resolver.requests, "get", lambda url, **kwargs: _FakeResponse(200, oversized_text)
     )
 
     with pytest.raises(resolver.SOVPResolverError, match="resource limit"):
@@ -79,7 +90,7 @@ def test_fetch_identity_document_rejects_oversized_response(monkeypatch):
 
 def test_fetch_identity_document_rejects_duplicate_keys(monkeypatch):
     monkeypatch.setattr(
-        resolver.requests, "get", lambda url, timeout, headers: _FakeResponse(200, '{"a":1,"a":2}')
+        resolver.requests, "get", lambda url, **kwargs: _FakeResponse(200, '{"a":1,"a":2}')
     )
 
     with pytest.raises(resolver.SOVPResolverError, match="resource limit"):
@@ -169,7 +180,7 @@ def test_fetch_identity_document_still_returns_a_well_formed_document(monkeypatc
 
     good_text = _json.dumps({"@context": "x", "entity": {"uid": "y"}})
     monkeypatch.setattr(
-        resolver.requests, "get", lambda url, timeout, headers: _FakeResponse(200, good_text)
+        resolver.requests, "get", lambda url, **kwargs: _FakeResponse(200, good_text)
     )
 
     doc = resolver.fetch_identity_document("good.example")
@@ -182,7 +193,7 @@ def test_fetch_identity_document_uses_fallback_only_on_404(monkeypatch):
 
     calls = []
 
-    def fake_get(url, timeout, headers):
+    def fake_get(url, **kwargs):
         calls.append(url)
         if url.endswith("/.well-known/sovp-identity.json"):
             return _FakeResponse(404, "")
@@ -201,7 +212,7 @@ def test_fetch_identity_document_uses_fallback_only_on_404(monkeypatch):
 def test_fetch_identity_document_does_not_fallback_on_server_error(monkeypatch):
     calls = []
 
-    def fake_get(url, timeout, headers):
+    def fake_get(url, **kwargs):
         calls.append(url)
         return _FakeResponse(500, "")
 
