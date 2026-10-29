@@ -3,10 +3,21 @@ main = "index.mjs"
 compatibility_date = "2024-01-01"
 workers_dev = false
 
-[[routes]]
-pattern = "litzki-systems.com/.well-known/sovp-identity.json"
-zone_name = "litzki-systems.com"
-
-[[routes]]
-pattern = "litzki-systems.com/sovp-identity.json"
-zone_name = "litzki-systems.com"
+# Reference deployment — deliberately shipped WITHOUT [[routes]].
+#
+# This worker is an example that accompanies sovp-python. A `wrangler deploy`
+# from a fresh checkout must not be able to attach itself to anybody's live
+# zone, so no route is configured here. Add your own before deploying:
+#
+# [[routes]]
+# pattern = "yourdomain.com/.well-known/sovp-identity.json*"
+# zone_name = "yourdomain.com"
+#
+# [[routes]]
+# pattern = "yourdomain.com/sovp-identity.json*"
+# zone_name = "yourdomain.com"
+#
+# Keep the trailing "*" on both patterns. Without it, a request carrying a
+# query string (…/sovp-identity.json?x=1) does not match the route and falls
+# through to whatever else serves that hostname — typically a static asset or
+# a 404, instead of the signed document.
